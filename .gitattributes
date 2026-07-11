@@ -1,0 +1,22 @@
+# Normalize line endings to LF on checkout, even on Windows.
+* text=auto eol=lf
+
+# Binary assets — never diff/normalize.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.webp binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.keystore binary
+*.jks binary
+*.lockb binary
+
+# Generated Flutter/iOS/Android resources.
+*.plist eol=lf
+*.gradle eol=lf
+*.kts eol=lf

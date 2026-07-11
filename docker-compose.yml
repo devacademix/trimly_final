@@ -1,0 +1,63 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Trimly — local development infrastructure.
+#   docker compose up -d        start postgres + redis
+#   docker compose ps           status
+#   docker compose logs -f      tail logs
+#   docker compose down         stop (keeps data volumes)
+#   docker compose down -v      stop AND delete data ⚠
+#
+# Credentials here are for LOCAL DEV ONLY. Production secrets come from your
+# orchestrator / secrets manager, never this file.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: trimly-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: trimly
+      POSTGRES_PASSWORD: trimly
+      POSTGRES_DB: trimly
+      # Tune for dev. Default config is fine but explicit is clearer.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+    # Host port 5434 (5432/5433 are used by other local projects).
+    ports:
+      - "5434:5432"
+    volumes:
+      - trimly_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trimly -d trimly"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: trimly-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - trimly_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # Optional: local mail capture for the Email notification channel.
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: trimly-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+
+volumes:
+  trimly_pg_data:
+  trimly_redis_data:
