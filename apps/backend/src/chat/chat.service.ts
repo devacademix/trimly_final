@@ -1,9 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class ChatService {
   constructor(private prisma: PrismaService) {}
+
+  // Whether a user is a participant of a chat room
+  async isRoomParticipant(roomId: string, userId: string): Promise<boolean> {
+    const participant = await this.prisma.chatParticipant.findFirst({
+      where: { roomId, userId },
+    });
+    return !!participant;
+  }
 
   // List active rooms
   async getRooms(userId: string) {
@@ -70,7 +78,12 @@ export class ChatService {
   }
 
   // Fetch paginated messages
-  async getMessages(roomId: string, limit = 50) {
+  async getMessages(roomId: string, userId: string, limit = 50) {
+    const isParticipant = await this.isRoomParticipant(roomId, userId);
+    if (!isParticipant) {
+      throw new ForbiddenException('You are not a participant of this chat room');
+    }
+
     return this.prisma.chatMessage.findMany({
       where: { roomId },
       orderBy: { createdAt: 'asc' },

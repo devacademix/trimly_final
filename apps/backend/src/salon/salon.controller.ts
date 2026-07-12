@@ -7,6 +7,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { TenantGuard } from '../common/guards/tenant.guard';
 import { TenantId } from '../common/decorators/tenant.decorator';
+import { UpdateSalonProfileDto, CreateBranchDto, RecruitStaffDto, CreateServiceDto, SetupSchedulesDto } from './dto/salon.dto';
 
 @ApiTags('Salon Business & Management')
 @ApiBearerAuth()
@@ -31,7 +32,7 @@ export class SalonController {
   @ApiOperation({ summary: 'Update Salon business profile details' })
   async updateProfile(
     @TenantId() tenantId: string,
-    @Body() data: any,
+    @Body() data: UpdateSalonProfileDto,
   ): Promise<ApiResponse<any>> {
     const profile = await this.salonService.updateProfile(tenantId, data);
     return {
@@ -55,7 +56,7 @@ export class SalonController {
   @ApiOperation({ summary: 'Create new branch (limited by subscription)' })
   async createBranch(
     @TenantId() tenantId: string,
-    @Body() data: any,
+    @Body() data: CreateBranchDto,
   ): Promise<ApiResponse<any>> {
     const branch = await this.salonService.createBranch(tenantId, data);
     return {
@@ -79,7 +80,7 @@ export class SalonController {
   @ApiOperation({ summary: 'Invite or recruit new staff profile (limited by subscription)' })
   async recruitStaff(
     @TenantId() tenantId: string,
-    @Body() data: any,
+    @Body() data: RecruitStaffDto,
   ): Promise<ApiResponse<any>> {
     const staff = await this.salonService.recruitStaff(tenantId, data);
     return {
@@ -103,7 +104,7 @@ export class SalonController {
   @ApiOperation({ summary: 'Add a service to the catalog' })
   async createService(
     @TenantId() tenantId: string,
-    @Body() data: any,
+    @Body() data: CreateServiceDto,
   ): Promise<ApiResponse<any>> {
     const service = await this.salonService.createService(tenantId, data);
     return {
@@ -112,12 +113,22 @@ export class SalonController {
     };
   }
 
+  @Get('customers')
+  @ApiOperation({ summary: 'List distinct customers who have booked with this salon' })
+  async getCustomers(@TenantId() tenantId: string): Promise<ApiResponse<any>> {
+    const customers = await this.salonService.getCustomers(tenantId);
+    return {
+      success: true,
+      data: customers,
+    };
+  }
+
   @Post('schedules')
   @Roles(UserRole.SALON_OWNER)
   @ApiOperation({ summary: 'Setup weekly working schedule' })
   async setupSchedules(
     @TenantId() tenantId: string,
-    @Body() data: { schedules: any[] },
+    @Body() data: SetupSchedulesDto,
   ): Promise<ApiResponse<any>> {
     const res = await this.salonService.setupSchedules(tenantId, data.schedules);
     return {

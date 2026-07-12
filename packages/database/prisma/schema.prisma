@@ -144,6 +144,7 @@ model User {
   lastLoginAt      DateTime?
   biometricEnabled Boolean      @default(false)
   preferredLocale  String       @default("en")
+  fcmToken         String?      // Latest Firebase Cloud Messaging device token
   referralCode     String?      @unique(map: "users_referral_code_unique")
   referredById     String?      @db.Uuid
   referredBy       User?        @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)

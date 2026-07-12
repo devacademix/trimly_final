@@ -1,21 +1,50 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../network/api_client.dart';
-import '../storage/local_storage.dart';
+import '../repositories/auth_repository.dart';
+import '../repositories/salon_repository.dart';
+import '../repositories/booking_repository.dart';
+import '../repositories/chat_repository.dart';
+import '../repositories/wallet_repository.dart';
+import '../services/push_notification_service.dart';
+import '../services/chat_socket_service.dart';
+import '../storage/secure_storage.dart';
 
-// Provider for SharedPreferences (overridden in main)
-final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError();
-});
+final secureStorageProvider = Provider<SecureStorage>((ref) => const SecureStorage());
 
-// Provider for LocalStorage
-final localStorageProvider = Provider<LocalStorage>((ref) {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  return LocalStorage(prefs);
-});
-
-// Provider for ApiClient
 final apiClientProvider = Provider<ApiClient>((ref) {
-  final localStorage = ref.watch(localStorageProvider);
-  return ApiClient(localStorage: localStorage);
+  final secureStorage = ref.watch(secureStorageProvider);
+  return ApiClient(secureStorage: secureStorage);
+});
+
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  return AuthRepository(
+    apiClient: ref.watch(apiClientProvider),
+    secureStorage: ref.watch(secureStorageProvider),
+  );
+});
+
+final salonRepositoryProvider = Provider<SalonRepository>((ref) {
+  return SalonRepository(apiClient: ref.watch(apiClientProvider));
+});
+
+final bookingRepositoryProvider = Provider<BookingRepository>((ref) {
+  return BookingRepository(apiClient: ref.watch(apiClientProvider));
+});
+
+final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) {
+  return PushNotificationService(apiClient: ref.watch(apiClientProvider));
+});
+
+final chatRepositoryProvider = Provider<ChatRepository>((ref) {
+  return ChatRepository(apiClient: ref.watch(apiClientProvider));
+});
+
+final chatSocketServiceProvider = Provider<ChatSocketService>((ref) {
+  final service = ChatSocketService(secureStorage: ref.watch(secureStorageProvider));
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+final walletRepositoryProvider = Provider<WalletRepository>((ref) {
+  return WalletRepository(apiClient: ref.watch(apiClientProvider));
 });

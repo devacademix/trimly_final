@@ -46,16 +46,23 @@ export class SubscriptionService {
   }
 
   // Handle incoming Razorpay Webhook
-  async handleWebhook(signature: string, payload: any) {
-    // If webhook secret is configured, we verify it
+  async handleWebhook(signature: string, rawBody: Buffer, payload: any) {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-    if (secret && signature) {
-      const shasum = crypto.createHmac('sha256', secret);
-      shasum.update(JSON.stringify(payload));
-      const digest = shasum.digest('hex');
-      if (digest !== signature) {
-        throw new BadRequestException('Invalid webhook signature');
-      }
+    if (!secret) {
+      throw new BadRequestException('Webhook secret not configured');
+    }
+    if (!signature || !rawBody) {
+      throw new BadRequestException('Missing webhook signature');
+    }
+
+    const digest = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+    const digestBuf = Buffer.from(digest, 'hex');
+    const signatureBuf = Buffer.from(signature, 'hex');
+    if (
+      digestBuf.length !== signatureBuf.length ||
+      !crypto.timingSafeEqual(digestBuf, signatureBuf)
+    ) {
+      throw new BadRequestException('Invalid webhook signature');
     }
 
     const event = payload.event;

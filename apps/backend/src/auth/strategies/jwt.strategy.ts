@@ -10,7 +10,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_ACCESS_SECRET ?? 'change-me-access-secret-32-chars-min',
+      // Validated present at boot by env.validation.ts — no insecure fallback.
+      secretOrKey: process.env.JWT_ACCESS_SECRET as string,
     });
   }
 
@@ -25,6 +26,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         role: true,
         status: true,
         tenantId: true,
+        profileImageUrl: true,
+        referralCode: true,
       },
     });
 

@@ -7,6 +7,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { TenantGuard } from '../common/guards/tenant.guard';
 import { TenantId } from '../common/decorators/tenant.decorator';
+import { CreateCategoryDto, CreateProductDto, StockMovementDto, LogExpenseDto } from './dto/inventory.dto';
 
 @ApiTags('Inventory & Retail Products')
 @ApiBearerAuth()
@@ -22,7 +23,7 @@ export class InventoryController {
   @ApiOperation({ summary: 'Create a new product category' })
   async createCategory(
     @TenantId() tenantId: string,
-    @Body() dto: { name: string },
+    @Body() dto: CreateCategoryDto,
   ): Promise<ApiResponse<any>> {
     const category = await this.inventoryService.createCategory(tenantId, dto.name);
     return {
@@ -46,7 +47,7 @@ export class InventoryController {
   @ApiOperation({ summary: 'Add a new retail product' })
   async createProduct(
     @TenantId() tenantId: string,
-    @Body() data: any,
+    @Body() data: CreateProductDto,
   ): Promise<ApiResponse<any>> {
     const product = await this.inventoryService.createProduct(tenantId, data);
     return {
@@ -69,7 +70,7 @@ export class InventoryController {
   @ApiOperation({ summary: 'Log product stock level changes (IN/OUT/ADJUSTMENT)' })
   async addStockMovement(
     @TenantId() tenantId: string,
-    @Body() data: any,
+    @Body() data: StockMovementDto,
   ): Promise<ApiResponse<any>> {
     const movement = await this.inventoryService.addStockMovement(tenantId, data);
     return {
@@ -83,7 +84,7 @@ export class InventoryController {
   @ApiOperation({ summary: 'Log salon business expense' })
   async logExpense(
     @TenantId() tenantId: string,
-    @Body() data: any,
+    @Body() data: LogExpenseDto,
   ): Promise<ApiResponse<any>> {
     const expense = await this.inventoryService.logExpense(tenantId, data);
     return {

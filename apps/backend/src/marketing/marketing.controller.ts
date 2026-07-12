@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import { MarketingService } from './marketing.service';
 import { ApiResponse, UserRole } from '@trimly/types';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiHeader } from '@nestjs/swagger';
@@ -8,6 +8,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { TenantGuard } from '../common/guards/tenant.guard';
 import { TenantId } from '../common/decorators/tenant.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { CreateCouponDto, CreateReviewDto, ReplyReviewDto } from './dto/marketing.dto';
 
 @ApiTags('Marketing, Coupons & Reviews')
 @Controller('marketing')
@@ -22,7 +23,7 @@ export class MarketingController {
   @ApiOperation({ summary: 'Create a discount coupon (Flat/Percentage)' })
   async createCoupon(
     @TenantId() tenantId: string,
-    @Body() data: any,
+    @Body() data: CreateCouponDto,
   ): Promise<ApiResponse<any>> {
     const coupon = await this.marketingService.createCoupon(tenantId, data);
     return {
@@ -65,7 +66,7 @@ export class MarketingController {
   @ApiOperation({ summary: 'Submit a review for a salon branch' })
   async createReview(
     @CurrentUser() user: any,
-    @Body() data: any,
+    @Body() data: CreateReviewDto,
   ): Promise<ApiResponse<any>> {
     const review = await this.marketingService.createReview(user.id, data);
     return {
@@ -80,9 +81,9 @@ export class MarketingController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Reply to customer review' })
   async reply(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: any,
-    @Body() dto: { replyText: string },
+    @Body() dto: ReplyReviewDto,
   ): Promise<ApiResponse<any>> {
     const res = await this.marketingService.createReply(id, user.id, dto.replyText);
     return {
@@ -93,7 +94,7 @@ export class MarketingController {
 
   @Get('reviews/salon/:salonId')
   @ApiOperation({ summary: 'List reviews submitted for a salon branch' })
-  async getReviews(@Param('salonId') salonId: string): Promise<ApiResponse<any>> {
+  async getReviews(@Param('salonId', ParseUUIDPipe) salonId: string): Promise<ApiResponse<any>> {
     const reviews = await this.marketingService.getReviews(salonId);
     return {
       success: true,

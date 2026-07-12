@@ -155,4 +155,5 @@ export interface AuthUser {
   fullName?: string | null;
   tenantId?: string | null;
   profileImageUrl?: string | null;
+  referralCode?: string | null;
 }

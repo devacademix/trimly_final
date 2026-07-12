@@ -27,6 +27,18 @@ export class AuthService {
     return otp;
   }
 
+  // Short shareable referral code, retried on the rare collision against the
+  // unique constraint on User.referralCode.
+  private async generateUniqueReferralCode(): Promise<string> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = `TRIM-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+      const existing = await this.prisma.user.findUnique({ where: { referralCode: code } });
+      if (!existing) return code;
+    }
+    // Astronomically unlikely, but fall back to a longer code rather than loop forever.
+    return `TRIM-${crypto.randomBytes(8).toString('hex').toUpperCase()}`;
+  }
+
   async register(dto: { email: string; password?: string; fullName: string; role: UserRole }): Promise<AuthUser> {
     const emailNormalized = dto.email.toLowerCase();
     const existing = await this.prisma.user.findUnique({
@@ -42,6 +54,8 @@ export class AuthService {
       passwordHash = await bcrypt.hash(dto.password, 12);
     }
 
+    const referralCode = await this.generateUniqueReferralCode();
+
     const user = await this.prisma.user.create({
       data: {
         email: emailNormalized,
@@ -50,6 +64,7 @@ export class AuthService {
         role: dto.role,
         status: UserStatus.ACTIVE, // For ease of test, set active.
         authProvider: AuthProvider.EMAIL,
+        referralCode,
       },
     });
 
@@ -62,6 +77,7 @@ export class AuthService {
       fullName: user.fullName,
       tenantId: user.tenantId,
       profileImageUrl: user.profileImageUrl,
+      referralCode: user.referralCode,
     };
   }
 
@@ -111,7 +127,11 @@ export class AuthService {
     });
 
     // TODO: Connect real SMS/WhatsApp gateway here.
-    console.info(`[SMS OTP SIMULATION] Sent OTP ${otp} to phone ${phoneNormalized}`);
+    // Never log the raw OTP, even in development — logs can end up shipped
+    // to aggregators or committed alongside CI output.
+    if (process.env.NODE_ENV !== 'production') {
+      console.info(`[SMS OTP SIMULATION] OTP requested for phone ${phoneNormalized} (delivery not yet wired to a provider)`);
+    }
 
     return {
       success: true,
@@ -153,6 +173,7 @@ export class AuthService {
     });
 
     if (!user) {
+      const referralCode = await this.generateUniqueReferralCode();
       user = await this.prisma.user.create({
         data: {
           phone: phoneNormalized,
@@ -160,6 +181,7 @@ export class AuthService {
           role: UserRole.CUSTOMER, // Defaults to CUSTOMER
           status: UserStatus.ACTIVE,
           authProvider: AuthProvider.OTP,
+          referralCode,
         },
       });
     }
@@ -206,7 +228,8 @@ export class AuthService {
     const payload = { sub: user.id, email: user.email, role: user.role };
     
     const accessToken = this.jwtService.sign(payload, {
-      secret: process.env.JWT_ACCESS_SECRET ?? 'change-me-access-secret-32-chars-min',
+      // Validated present at boot by env.validation.ts — no insecure fallback.
+      secret: process.env.JWT_ACCESS_SECRET as string,
       expiresIn: process.env.JWT_ACCESS_TTL ?? '15m',
     });
 
@@ -239,6 +262,7 @@ export class AuthService {
         fullName: user.fullName,
         tenantId: user.tenantId,
         profileImageUrl: user.profileImageUrl,
+        referralCode: user.referralCode,
       },
     };
   }

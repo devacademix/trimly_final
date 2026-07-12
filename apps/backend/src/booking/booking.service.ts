@@ -1,13 +1,22 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubscriptionService } from '../subscription/subscription.service';
+import { NotificationService } from '../notifications/notification.service';
 import { BookingStatus } from '@trimly/database';
+import { UserRole } from '@trimly/types';
+
+interface RequestingUser {
+  id: string;
+  role: UserRole;
+  tenantId?: string | null;
+}
 
 @Injectable()
 export class BookingService {
   constructor(
     private prisma: PrismaService,
     private subService: SubscriptionService,
+    private notificationService: NotificationService,
   ) {}
 
   // Calculate live slot availability for a salon branch & date
@@ -121,8 +130,8 @@ export class BookingService {
       throw new BadRequestException('Booking limit reached for current subscription plan. Upgrade to receive more appointments.');
     }
 
-    const service = await this.prisma.service.findUnique({
-      where: { id: data.serviceId },
+    const service = await this.prisma.service.findFirst({
+      where: { id: data.serviceId, tenantId },
     });
     if (!service) {
       throw new NotFoundException('Requested service not found');
@@ -131,8 +140,8 @@ export class BookingService {
     const startTime = new Date(data.startTime);
     const endTime = new Date(startTime.getTime() + service.duration * 60 * 1000);
 
-    return this.prisma.$transaction(async (tx) => {
-      const booking = await tx.booking.create({
+    const booking = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.booking.create({
         data: {
           tenantId,
           branchId: data.branchId,
@@ -147,7 +156,7 @@ export class BookingService {
 
       await tx.bookingItem.create({
         data: {
-          bookingId: booking.id,
+          bookingId: created.id,
           serviceId: service.id,
           price: service.price,
         },
@@ -155,25 +164,50 @@ export class BookingService {
 
       await tx.bookingHistory.create({
         data: {
-          bookingId: booking.id,
+          bookingId: created.id,
           status: BookingStatus.PENDING,
           notes: 'Booking created via API',
         },
       });
 
-      return booking;
+      return created;
     });
+
+    // Notification failures must never fail the booking itself.
+    this.notificationService.notifyBookingCreated(booking.id).catch(() => undefined);
+
+    return booking;
+  }
+
+  // Ensure the requesting user is allowed to act on this booking
+  // (the booking's own customer, or salon staff/owner/super-admin of its tenant).
+  private assertBookingAccess(booking: { customerId: string; tenantId: string }, user: RequestingUser) {
+    if (user.role === UserRole.SUPER_ADMIN) return;
+    if (user.role === UserRole.CUSTOMER) {
+      if (booking.customerId !== user.id) {
+        throw new ForbiddenException('You do not have access to this booking');
+      }
+      return;
+    }
+    if (user.role === UserRole.SALON_OWNER || user.role === UserRole.STAFF) {
+      if (booking.tenantId !== user.tenantId) {
+        throw new ForbiddenException('You do not have access to this booking');
+      }
+      return;
+    }
+    throw new ForbiddenException('You do not have access to this booking');
   }
 
   // Cancel Booking
-  async cancelBooking(bookingId: string, notes?: string) {
+  async cancelBooking(bookingId: string, user: RequestingUser, notes?: string) {
     const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
     if (!booking) {
       throw new NotFoundException('Booking not found');
     }
+    this.assertBookingAccess(booking, user);
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.booking.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.booking.update({
         where: { id: bookingId },
         data: { status: BookingStatus.CANCELLED },
       });
@@ -186,12 +220,16 @@ export class BookingService {
         },
       });
 
-      return updated;
+      return result;
     });
+
+    this.notificationService.notifyBookingStatusChange(bookingId, BookingStatus.CANCELLED).catch(() => undefined);
+
+    return updated;
   }
 
   // Reschedule Booking
-  async rescheduleBooking(bookingId: string, startTimeStr: string) {
+  async rescheduleBooking(bookingId: string, user: RequestingUser, startTimeStr: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       include: { items: { include: { service: true } } },
@@ -199,6 +237,7 @@ export class BookingService {
     if (!booking) {
       throw new NotFoundException('Booking not found');
     }
+    this.assertBookingAccess(booking, user);
 
     const item = booking.items[0];
     if (!item) {
@@ -224,6 +263,66 @@ export class BookingService {
 
       return updated;
     });
+  }
+
+  // List bookings scoped to the requesting user: customers see their own
+  // bookings, salon owner/staff see their tenant's bookings.
+  async listBookings(user: RequestingUser, status?: BookingStatus) {
+    const where: Record<string, unknown> = status ? { status } : {};
+
+    if (user.role === UserRole.CUSTOMER) {
+      where.customerId = user.id;
+    } else if (user.role === UserRole.SALON_OWNER || user.role === UserRole.STAFF) {
+      if (!user.tenantId) return [];
+      where.tenantId = user.tenantId;
+    } else {
+      throw new ForbiddenException('You do not have access to bookings');
+    }
+
+    return this.prisma.booking.findMany({
+      where,
+      include: {
+        items: { include: { service: { select: { name: true, duration: true } } } },
+        branch: { select: { name: true, address: true } },
+        customer: { select: { fullName: true, email: true, phone: true } },
+        staff: { select: { user: { select: { fullName: true } } } },
+      },
+      orderBy: { startTime: 'desc' },
+    });
+  }
+
+  // Salon owner/staff transitions a booking's status (confirm, complete, no-show, cancel).
+  async updateBookingStatus(bookingId: string, user: RequestingUser, status: BookingStatus) {
+    if (user.role !== UserRole.SALON_OWNER && user.role !== UserRole.STAFF && user.role !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('You do not have permission to update booking status');
+    }
+
+    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+    this.assertBookingAccess(booking, user);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.booking.update({
+        where: { id: bookingId },
+        data: { status },
+      });
+
+      await tx.bookingHistory.create({
+        data: {
+          bookingId,
+          status,
+          notes: `Status updated to ${status}`,
+        },
+      });
+
+      return result;
+    });
+
+    this.notificationService.notifyBookingStatusChange(bookingId, status).catch(() => undefined);
+
+    return updated;
   }
 
   // Add to waiting list

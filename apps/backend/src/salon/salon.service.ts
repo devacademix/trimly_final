@@ -162,6 +162,36 @@ export class SalonService {
     });
   }
 
+  // Distinct customers who have booked with this tenant, with visit counts.
+  async getCustomers(tenantId: string) {
+    const bookings = await this.prisma.booking.findMany({
+      where: { tenantId },
+      select: {
+        customerId: true,
+        startTime: true,
+        customer: {
+          select: { id: true, fullName: true, email: true, phone: true, profileImageUrl: true },
+        },
+      },
+      orderBy: { startTime: 'desc' },
+    });
+
+    const byCustomer = new Map<string, { customer: (typeof bookings)[number]['customer']; visits: number; lastVisit: Date }>();
+    for (const b of bookings) {
+      const existing = byCustomer.get(b.customerId);
+      if (!existing) {
+        byCustomer.set(b.customerId, { customer: b.customer, visits: 1, lastVisit: b.startTime });
+      } else {
+        existing.visits += 1;
+        if (b.startTime > existing.lastVisit) existing.lastVisit = b.startTime;
+      }
+    }
+
+    return Array.from(byCustomer.values())
+      .sort((a, b) => b.lastVisit.getTime() - a.lastVisit.getTime())
+      .map((entry) => ({ ...entry.customer, visits: entry.visits, lastVisit: entry.lastVisit }));
+  }
+
   // Setup operational working hours
   async setupSchedules(tenantId: string, schedules: any[]) {
     return this.prisma.$transaction(

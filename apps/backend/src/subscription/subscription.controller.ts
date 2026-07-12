@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Query, Headers, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Req, Headers, UseGuards, HttpCode, HttpStatus, RawBodyRequest } from '@nestjs/common';
+import type { Request } from 'express';
 import { SubscriptionService } from './subscription.service';
 import { ApiResponse, UserRole } from '@trimly/types';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -6,6 +7,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { SubscriptionCheckoutDto } from './dto/subscription.dto';
 
 @ApiTags('Subscriptions & Billing')
 @Controller('subscription')
@@ -29,7 +31,7 @@ export class SubscriptionController {
   @ApiOperation({ summary: 'Create checkout session for purchasing a subscription plan' })
   async checkout(
     @CurrentUser() user: any,
-    @Body() dto: { planId: string },
+    @Body() dto: SubscriptionCheckoutDto,
   ): Promise<ApiResponse<any>> {
     const session = await this.subService.createCheckout(user.tenantId, dto.planId);
     return {
@@ -43,9 +45,10 @@ export class SubscriptionController {
   @ApiOperation({ summary: 'Razorpay subscription webhook endpoint' })
   async webhook(
     @Headers('x-razorpay-signature') signature: string,
+    @Req() req: RawBodyRequest<Request>,
     @Body() payload: any,
   ): Promise<any> {
-    return this.subService.handleWebhook(signature, payload);
+    return this.subService.handleWebhook(signature, req.rawBody as Buffer, payload);
   }
 
   @Get('status')

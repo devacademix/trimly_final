@@ -1,0 +1,99 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "apps/backend/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "apps/backend/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/backend.yml"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: trimly
+          POSTGRES_PASSWORD: trimly
+          POSTGRES_DB: trimly
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U trimly"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://trimly:trimly@localhost:5434/trimly?schema=public
+      DIRECT_DATABASE_URL: postgresql://trimly:trimly@localhost:5434/trimly?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci-test-access-secret-32-characters-min
+      JWT_REFRESH_SECRET: ci-test-refresh-secret-32-characters-min
+      OTP_HMAC_SECRET: ci-test-otp-hmac-secret
+      CORS_ORIGINS: http://localhost:3000
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @trimly/database db:generate
+
+      - name: Build shared packages
+        run: pnpm --filter @trimly/types build
+
+      - name: Run database migrations
+        run: pnpm --filter @trimly/database db:migrate:deploy
+
+      - name: Lint
+        run: pnpm --filter @trimly/backend lint
+
+      - name: Unit tests
+        run: pnpm --filter @trimly/backend test
+
+      - name: E2E tests
+        run: pnpm --filter @trimly/backend test:e2e
+
+      - name: Build
+        run: pnpm --filter @trimly/backend build
+
+      - name: Validate production Docker image builds
+        run: docker build -f apps/backend/Dockerfile -t trimly-backend:ci .

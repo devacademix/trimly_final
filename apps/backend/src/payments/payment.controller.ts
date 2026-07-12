@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Body, Param, Query, Res, Headers, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, ParseUUIDPipe, Query, Res, Req, Headers, UseGuards, HttpCode, HttpStatus, RawBodyRequest } from '@nestjs/common';
+import type { Request } from 'express';
 import { PaymentService } from './payment.service';
 import { ApiResponse, UserRole } from '@trimly/types';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -7,6 +8,8 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { TenantGuard } from '../common/guards/tenant.guard';
 import { TenantId } from '../common/decorators/tenant.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { CheckoutDto } from './dto/payment.dto';
 
 @ApiTags('Payment & Commission Split')
 @Controller('payments')
@@ -19,9 +22,10 @@ export class PaymentController {
   @ApiOperation({ summary: 'Initiate a checkout session for booking (calculates platform split)' })
   async checkout(
     @TenantId() tenantId: string,
-    @Body() dto: { bookingId: string },
+    @CurrentUser() user: any,
+    @Body() dto: CheckoutDto,
   ): Promise<ApiResponse<any>> {
-    const session = await this.paymentService.createBookingCheckout(tenantId, dto.bookingId);
+    const session = await this.paymentService.createBookingCheckout(tenantId, dto.bookingId, user);
     return {
       success: true,
       data: session,
@@ -32,10 +36,33 @@ export class PaymentController {
   @ApiOperation({ summary: 'Serve standard Razorpay hosted checkout page' })
   checkoutPage(
     @Query('orderId') orderId: string,
-    @Query('keyId') keyId: string,
     @Query('amount') amount: string,
     @Res() res: any,
   ) {
+    // Validate untrusted query params before ever interpolating them into HTML/JS.
+    // Razorpay order IDs are alphanumeric/underscore only; reject anything else
+    // instead of reflecting attacker-controlled markup back into the page.
+    if (!orderId || !/^[A-Za-z0-9_]+$/.test(orderId)) {
+      return res.status(400).send('Invalid orderId');
+    }
+    const amountNum = Number(amount);
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      return res.status(400).send('Invalid amount');
+    }
+    // The Razorpay public key is always the server-configured one, never
+    // client-supplied, so a caller can't point checkout at an arbitrary key.
+    const keyId = process.env.RAZORPAY_KEY_ID || 'dummy_key_id';
+
+    const safeOptions = JSON.stringify({
+      key: keyId,
+      amount: Math.round(amountNum * 100),
+      currency: 'INR',
+      name: 'Trimly Bookings',
+      description: 'Secure Salon Settlement',
+      order_id: orderId,
+      theme: { color: '#6366F1' },
+    }).replace(/</g, '\\u003c');
+
     const html = `
       <!DOCTYPE html>
       <html>
@@ -70,19 +97,9 @@ export class PaymentController {
           <p style="margin-top: 20px; font-weight: bold;">Loading Secure Razorpay Portal...</p>
           <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
           <script>
-            var options = {
-              "key": "${keyId}",
-              "amount": "${Number(amount) * 100}", // amount in paise
-              "currency": "INR",
-              "name": "Trimly Bookings",
-              "description": "Secure Salon Settlement",
-              "order_id": "${orderId}",
-              "handler": function (response) {
-                document.body.innerHTML = "<h2>Payment Successful!</h2><p>You can close this window now.</p>";
-              },
-              "theme": {
-                "color": "#6366F1"
-              }
+            var options = ${safeOptions};
+            options.handler = function (response) {
+              document.body.innerHTML = "<h2>Payment Successful!</h2><p>You can close this window now.</p>";
             };
             var rzp = new Razorpay(options);
             rzp.on('payment.failed', function (response){
@@ -104,9 +121,10 @@ export class PaymentController {
   @ApiOperation({ summary: 'Razorpay payment capture webhook endpoint' })
   async webhook(
     @Headers('x-razorpay-signature') signature: string,
+    @Req() req: RawBodyRequest<Request>,
     @Body() payload: any,
   ): Promise<any> {
-    return this.paymentService.handleWebhook(signature, payload);
+    return this.paymentService.handleWebhook(signature, req.rawBody as Buffer, payload);
   }
 
   @Post(':id/refund')
@@ -114,8 +132,8 @@ export class PaymentController {
   @Roles(UserRole.SUPER_ADMIN, UserRole.SALON_OWNER)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Initiate refund and reclaim platform split proportionally' })
-  async refund(@Param('id') id: string): Promise<ApiResponse<any>> {
-    const res = await this.paymentService.refundPayment(id);
+  async refund(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: any): Promise<ApiResponse<any>> {
+    const res = await this.paymentService.refundPayment(id, user);
     return {
       success: true,
       data: res,

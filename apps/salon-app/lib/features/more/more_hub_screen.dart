@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/providers/auth_provider.dart';
 
-class MoreHubScreen extends StatefulWidget {
+class MoreHubScreen extends ConsumerStatefulWidget {
   const MoreHubScreen({super.key});
 
   @override
-  State<MoreHubScreen> createState() => _MoreHubScreenState();
+  ConsumerState<MoreHubScreen> createState() => _MoreHubScreenState();
 }
 
-class _MoreHubScreenState extends State<MoreHubScreen> {
+class _MoreHubScreenState extends ConsumerState<MoreHubScreen> {
   bool _isClockedIn = false;
 
   void _handleClockIn() {
@@ -26,7 +28,7 @@ class _MoreHubScreenState extends State<MoreHubScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final user = ref.watch(authControllerProvider).user;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
@@ -38,6 +40,21 @@ class _MoreHubScreenState extends State<MoreHubScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
+            // Signed-in account — real data from /auth/me
+            if (user != null)
+              Card(
+                color: const Color(0xFF1E293B),
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF6366F1),
+                    child: Icon(Icons.storefront, color: Colors.white),
+                  ),
+                  title: Text(user.displayName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  subtitle: Text(user.email ?? user.phone ?? '', style: const TextStyle(color: Colors.blueGrey)),
+                ),
+              ),
+            const SizedBox(height: 16),
+
             // Staff Attendance Card (Quick clock in/out)
             Card(
               color: const Color(0xFF1E293B),
@@ -130,17 +147,26 @@ class _MoreHubScreenState extends State<MoreHubScreen> {
 
             // More Features List
             _buildSectionHeader('Multi-Tenant SaaS Controls'),
-            _buildHubListTile(Icons.storefront, 'Branch List & Analytics', 'Manage Koramangala and Indiranagar branches'),
-            _buildHubListTile(Icons.inventory_2_outlined, 'Inventory Tracking', '4 Products low in stock alerts'),
+            _buildHubListTile(Icons.storefront, 'Branch List & Analytics', 'Manage your salon branches'),
+            _buildHubListTile(
+              Icons.people_alt_outlined,
+              'Staff Roster',
+              'Manage specialists and their availability',
+              onTap: () => context.push('/staff'),
+            ),
+            _buildHubListTile(
+              Icons.inventory_2_outlined,
+              'Inventory Tracking',
+              'Manage retail products and stock levels',
+              onTap: () => context.push('/inventory'),
+            ),
             _buildHubListTile(Icons.account_balance_outlined, 'Payroll & Commission rules', 'Review staff monthly splits'),
             _buildHubListTile(Icons.assignment_ind_outlined, 'Role-Based Permissions', 'Define Receptionist and Manager rules'),
             const SizedBox(height: 24),
 
             // Logout Business
             ElevatedButton(
-              onPressed: () {
-                context.go('/');
-              },
+              onPressed: () => ref.read(authControllerProvider.notifier).logout(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
                 foregroundColor: Colors.white,
@@ -169,7 +195,7 @@ class _MoreHubScreenState extends State<MoreHubScreen> {
     );
   }
 
-  Widget _buildHubListTile(IconData icon, String title, String subtitle) {
+  Widget _buildHubListTile(IconData icon, String title, String subtitle, {VoidCallback? onTap}) {
     return Card(
       color: const Color(0xFF1E293B),
       margin: const EdgeInsets.only(bottom: 10),
@@ -178,7 +204,10 @@ class _MoreHubScreenState extends State<MoreHubScreen> {
         title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Text(subtitle, style: const TextStyle(color: Colors.blueGrey, fontSize: 12)),
         trailing: const Icon(Icons.chevron_right, color: Colors.blueGrey, size: 18),
-        onTap: () {},
+        onTap: onTap ??
+            () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Coming soon')),
+                ),
       ),
     );
   }

@@ -4,9 +4,18 @@ import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { NestWinstonLogger } from './common/logger/winston.logger';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true preserves the exact request bytes on req.rawBody, needed to
+  // verify Razorpay webhook HMAC signatures (which are computed over the raw
+  // payload, not the re-serialized parsed JSON).
+  const app = await NestFactory.create(AppModule, { rawBody: true });
+
+  // Structured logging (JSON in prod, colorized in dev) instead of Nest's
+  // default console logger.
+  app.useLogger(new NestWinstonLogger());
 
   // Enable CORS
   app.enableCors({
@@ -35,6 +44,9 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
+
+  // Global Exception Filter — normalizes all errors into { success: false, error }
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   // Swagger Documentation Setup
   const config = new DocumentBuilder()

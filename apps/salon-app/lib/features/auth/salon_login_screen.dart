@@ -1,36 +1,40 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/providers/auth_provider.dart';
 
-class SalonLoginScreen extends StatefulWidget {
+class SalonLoginScreen extends ConsumerStatefulWidget {
   const SalonLoginScreen({super.key});
 
   @override
-  State<SalonLoginScreen> createState() => _SalonLoginScreenState();
+  ConsumerState<SalonLoginScreen> createState() => _SalonLoginScreenState();
 }
 
-class _SalonLoginScreenState extends State<SalonLoginScreen> {
+class _SalonLoginScreenState extends ConsumerState<SalonLoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController(text: 'owner@trimly.test');
   final _passwordController = TextEditingController(text: 'ChangeMe!2026');
   bool _obscurePassword = true;
   bool _isLoading = false;
 
-  void _handleLogin() {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
 
-      // Simulate network sign-in delay
-      Future.delayed(const Duration(seconds: 1), () {
-        setState(() {
-          _isLoading = false;
-        });
-        if (mounted) {
-          context.go('/dashboard');
-        }
-      });
+    setState(() => _isLoading = true);
+
+    final success = await ref.read(authControllerProvider.notifier).login(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (!success) {
+      final message = ref.read(authControllerProvider).errorMessage ?? 'Login failed';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
+    // On success, the router's redirect (driven by authControllerProvider)
+    // takes over and navigates to /dashboard.
   }
 
   @override
@@ -42,7 +46,6 @@ class _SalonLoginScreenState extends State<SalonLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
@@ -87,7 +90,7 @@ class _SalonLoginScreenState extends State<SalonLoginScreen> {
                     'Trimly Business',
                     style: TextStyle(
                       fontSize: 28,
-                      fontWeight: FontWeight.black,
+                      fontWeight: FontWeight.w900,
                       color: Colors.white,
                       letterSpacing: 1.2,
                     ),

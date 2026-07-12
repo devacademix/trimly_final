@@ -1,10 +1,11 @@
-import { Controller, Get, Patch, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Body, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { UserRole, ApiResponse } from '@trimly/types';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { UpdateSalonStatusDto, UpdateSalonCommissionDto, SetGlobalCommissionDto } from './dto/admin.dto';
 
 @ApiTags('Super Admin Control')
 @ApiBearerAuth()
@@ -27,8 +28,8 @@ export class AdminController {
   @Patch('salons/:id/status')
   @ApiOperation({ summary: 'Approve, reject, or suspend a salon tenant' })
   async updateSalonStatus(
-    @Param('id') id: string,
-    @Body() dto: { status: string; isActive: boolean },
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateSalonStatusDto,
   ): Promise<ApiResponse<any>> {
     const salon = await this.adminService.updateSalonStatus(id, dto.status, dto.isActive);
     return {
@@ -40,8 +41,8 @@ export class AdminController {
   @Patch('salons/:id/commission')
   @ApiOperation({ summary: 'Override commission rate per salon' })
   async updateSalonCommission(
-    @Param('id') id: string,
-    @Body() dto: { commissionPct: number },
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateSalonCommissionDto,
   ): Promise<ApiResponse<any>> {
     const salon = await this.adminService.updateSalonCommission(id, dto.commissionPct);
     return {
@@ -72,9 +73,7 @@ export class AdminController {
 
   @Post('settings/commission')
   @ApiOperation({ summary: 'Configure global default platform commission' })
-  async setGlobalCommission(
-    @Body() dto: { commissionPct: number },
-  ): Promise<ApiResponse<any>> {
+  async setGlobalCommission(@Body() dto: SetGlobalCommissionDto): Promise<ApiResponse<any>> {
     const setting = await this.adminService.setGlobalCommission(dto.commissionPct);
     return {
       success: true,

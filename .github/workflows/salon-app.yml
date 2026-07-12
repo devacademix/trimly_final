@@ -1,0 +1,47 @@
+name: Salon App CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "apps/salon-app/**"
+      - ".github/workflows/salon-app.yml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "apps/salon-app/**"
+      - ".github/workflows/salon-app.yml"
+
+defaults:
+  run:
+    working-directory: apps/salon-app
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      # No release keystore secrets are configured in CI (apps/salon-app/android/key.properties
+      # is gitignored and only exists on developer machines). The Gradle signing
+      # config falls back to debug signing when that file is absent, so this
+      # still validates the release build compiles without needing real secrets.
+      - name: Build release APK (debug-signed fallback in CI)
+        run: flutter build apk --release

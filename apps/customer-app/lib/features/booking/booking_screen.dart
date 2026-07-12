@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/models/booking_draft.dart';
+import '../../core/network/api_exception.dart';
 import '../../core/providers/api_providers.dart';
 
 class BookingScreen extends ConsumerStatefulWidget {
-  final Map<String, dynamic> bookingData;
+  final BookingDraft draft;
 
-  const BookingScreen({super.key, required this.bookingData});
+  const BookingScreen({super.key, required this.draft});
 
   @override
   ConsumerState<BookingScreen> createState() => _BookingScreenState();
@@ -16,13 +18,53 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
   DateTime _selectedDate = DateTime.now();
   String? _selectedTime;
   bool _isBooking = false;
+  bool _isLoadingSlots = false;
   String _selectedPaymentMethod = 'Razorpay';
+  List<String> _slots = [];
+  String? _slotsError;
 
-  final List<String> _morningSlots = ['09:00 AM', '10:00 AM', '11:00 AM'];
-  final List<String> _afternoonSlots = ['12:00 PM', '02:00 PM', '03:00 PM', '04:00 PM'];
-  final List<String> _eveningSlots = ['05:00 PM', '06:00 PM', '07:00 PM'];
+  @override
+  void initState() {
+    super.initState();
+    _loadSlots();
+  }
 
-  void _confirmBooking() async {
+  Future<void> _loadSlots() async {
+    setState(() {
+      _isLoadingSlots = true;
+      _slotsError = null;
+      _selectedTime = null;
+    });
+    try {
+      final result = await ref.read(bookingRepositoryProvider).getAvailability(
+            tenantId: widget.draft.tenantId,
+            branchId: widget.draft.branchId,
+            date: _selectedDate,
+            staffId: widget.draft.staff?.id,
+          );
+      if (!mounted) return;
+      setState(() {
+        _slots = result.isOpen ? result.slots : [];
+        _slotsError = result.isOpen ? null : (result.reason ?? 'Closed on this date');
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _slotsError = e is ApiException ? e.message : 'Failed to load available slots');
+    } finally {
+      if (mounted) setState(() => _isLoadingSlots = false);
+    }
+  }
+
+  DateTime _combineDateAndSlot(DateTime date, String slot) {
+    // Slots are "HH:MM - HH:MM"; take the start time.
+    final startStr = slot.split(' - ').first.trim();
+    final parts = startStr.split(':');
+    final hour = int.parse(parts[0]);
+    final minute = int.parse(parts[1]);
+    return DateTime(date.year, date.month, date.day, hour, minute);
+  }
+
+  Future<void> _confirmBooking() async {
     if (_selectedTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a time slot.')),
@@ -30,144 +72,104 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
       return;
     }
 
-    setState(() {
-      _isBooking = true;
-    });
+    setState(() => _isBooking = true);
 
-    final apiClient = ref.read(apiClientProvider);
-    final salon = widget.bookingData['salon'];
-    final service = widget.bookingData['service'];
-    final staff = widget.bookingData['staff'];
+    final bookingRepo = ref.read(bookingRepositoryProvider);
+    final startTime = _combineDateAndSlot(_selectedDate, _selectedTime!);
 
     try {
-      // Step 1: Create booking in NestJS backend
-      final bookingResponse = await apiClient.dio.post('/booking/create', data: {
-        'branchId': salon['id'] ?? 'db900e57-3a13-4e89-bdc8-3a56cf996452',
-        'serviceId': service['id'] ?? '16b9a896-bc9c-4df4-a4b7-0f81d115456f',
-        'staffId': staff?['id'],
-        'startTime': DateTime.now().add(const Duration(days: 1)).toIso8601String(),
-      });
+      final booking = await bookingRepo.createBooking(
+        tenantId: widget.draft.tenantId,
+        branchId: widget.draft.branchId,
+        serviceId: widget.draft.service.id,
+        staffId: widget.draft.staff?.id,
+        startTime: startTime,
+      );
 
-      final bookingId = bookingResponse.data['data']['id'];
-
-      setState(() {
-        _isBooking = false;
-      });
+      if (!mounted) return;
+      setState(() => _isBooking = false);
 
       if (_selectedPaymentMethod == 'Wallet') {
-        // Direct confirmation for Wallet
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: const BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check,
-                    color: Colors.white,
-                    size: 48,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Booking Confirmed!',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Your slot at ${salon['name']} is booked for ${_selectedDate.day}/${_selectedDate.month} at $_selectedTime.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    GoRouter.of(context).go('/home');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text('Go to Home'),
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        );
-      } else {
-        // Step 2: Fetch Razorpay checkout session details
-        final checkoutResponse = await apiClient.dio.post('/payments/checkout', data: {
-          'bookingId': bookingId,
-        });
-
-        final checkoutData = checkoutResponse.data['data'];
-
-        // Go to Hosted Payment Gateway
-        context.push('/payment-gateway', extra: {
-          'method': _selectedPaymentMethod,
-          'price': service['price'],
-          'bookingId': bookingId,
-          'orderId': checkoutData['orderId'],
-          'keyId': checkoutData['keyId'],
-          'salon': salon,
-          'service': service,
-          'staff': staff,
-        });
+        _showConfirmedDialog();
+        return;
       }
+
+      final checkout = await bookingRepo.checkout(tenantId: widget.draft.tenantId, bookingId: booking.id);
+      if (!mounted) return;
+
+      context.push('/payment-gateway', extra: CheckoutDraft(
+        tenantId: widget.draft.tenantId,
+        bookingId: booking.id,
+        orderId: checkout.orderId,
+        keyId: checkout.keyId,
+        price: checkout.amount,
+        salonName: widget.draft.salonName,
+        serviceName: widget.draft.service.name,
+        paymentMethod: _selectedPaymentMethod,
+      ));
     } catch (e) {
-      // Sandbox fallback if API is unreachable / mock data
-      setState(() {
-        _isBooking = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Connected to Gateway (Sandbox Mode)')),
-      );
-      context.push('/payment-gateway', extra: {
-        'method': _selectedPaymentMethod,
-        'price': service['price'],
-        'bookingId': 'mock-booking-id',
-        'orderId': 'order_mock_${DateTime.now().millisecondsSinceEpoch}',
-        'keyId': 'rzp_test_SnDZnu70NYQ1f5',
-        'salon': salon,
-        'service': service,
-        'staff': staff,
-      });
+      if (!mounted) return;
+      setState(() => _isBooking = false);
+      final message = e is ApiException ? e.message : 'Something went wrong. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
+  }
+
+  void _showConfirmedDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+              child: const Icon(Icons.check, color: Colors.white, size: 48),
+            ),
+            const SizedBox(height: 24),
+            const Text('Booking Confirmed!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Text(
+              'Your slot at ${widget.draft.salonName} is booked for ${_selectedDate.day}/${_selectedDate.month} at $_selectedTime.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                GoRouter.of(context).go('/home');
+              },
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Go to Home'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final salon = widget.bookingData['salon'];
-    final service = widget.bookingData['service'];
-    final staff = widget.bookingData['staff'];
+    final service = widget.draft.service;
+    final staff = widget.draft.staff;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Select Slot'),
-      ),
+      appBar: AppBar(title: const Text('Select Slot')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Selected service summary card
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -178,44 +180,34 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
               child: Row(
                 children: [
                   CircleAvatar(
-                    backgroundImage: NetworkImage(staff['avatar']),
                     radius: 24,
+                    backgroundImage: staff?.profileImageUrl != null ? NetworkImage(staff!.profileImageUrl!) : null,
+                    child: staff?.profileImageUrl == null ? const Icon(Icons.content_cut) : null,
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          service['name'],
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
+                        Text(service.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         const SizedBox(height: 4),
                         Text(
-                          'Specialist: ${staff['name']} • ${service['duration']}',
+                          staff != null ? 'Specialist: ${staff.fullName} • ${service.duration} min' : '${service.duration} min',
                           style: const TextStyle(color: Colors.grey, fontSize: 13),
                         ),
                       ],
                     ),
                   ),
                   Text(
-                    '₹${service['price'].toStringAsFixed(0)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: theme.colorScheme.primary,
-                    ),
+                    '₹${service.price.toStringAsFixed(0)}',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: theme.colorScheme.primary),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 28),
 
-            // Date picker section
-            const Text(
-              'Select Date',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const Text('Select Date', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             SizedBox(
               height: 85,
@@ -225,40 +217,28 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                 separatorBuilder: (context, index) => const SizedBox(width: 10),
                 itemBuilder: (context, index) {
                   final date = DateTime.now().add(Duration(days: index));
-                  final isSelected = _selectedDate.day == date.day &&
-                      _selectedDate.month == date.month;
-                  
+                  final isSelected = _selectedDate.day == date.day && _selectedDate.month == date.month;
                   final weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
                   return GestureDetector(
                     onTap: () {
-                      setState(() {
-                        _selectedDate = date;
-                      });
+                      setState(() => _selectedDate = date);
+                      _loadSlots();
                     },
                     child: Container(
                       width: 65,
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: isSelected
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.surface,
+                        color: isSelected ? theme.colorScheme.primary : theme.colorScheme.surface,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected
-                              ? theme.colorScheme.primary
-                              : Colors.grey.shade300,
-                        ),
+                        border: Border.all(color: isSelected ? theme.colorScheme.primary : Colors.grey.shade300),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
                             weekdays[date.weekday % 7],
-                            style: TextStyle(
-                              color: isSelected ? Colors.white70 : Colors.grey,
-                              fontSize: 12,
-                            ),
+                            style: TextStyle(color: isSelected ? Colors.white70 : Colors.grey, fontSize: 12),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -278,41 +258,58 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
             ),
             const SizedBox(height: 28),
 
-            // Time slots section
-            const Text(
-              'Select Time Slot',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const Text('Select Time Slot', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            
-            // Morning
-            _buildTimeSlotSection('Morning', _morningSlots, theme),
-            const SizedBox(height: 16),
-
-            // Afternoon
-            _buildTimeSlotSection('Afternoon', _afternoonSlots, theme),
-            const SizedBox(height: 16),
-
-            // Evening
-            _buildTimeSlotSection('Evening', _eveningSlots, theme),
+            if (_isLoadingSlots)
+              const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+            else if (_slotsError != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(_slotsError!, style: const TextStyle(color: Colors.grey)),
+              )
+            else if (_slots.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Text('No slots available on this date.', style: TextStyle(color: Colors.grey)),
+              )
+            else
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: _slots.map((slot) {
+                  final isSelected = _selectedTime == slot;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedTime = slot),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected ? theme.colorScheme.primary.withOpacity(0.08) : theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: isSelected ? theme.colorScheme.primary : Colors.grey.shade300),
+                      ),
+                      child: Text(
+                        slot,
+                        style: TextStyle(
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          color: isSelected ? theme.colorScheme.primary : Colors.black87,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
             const SizedBox(height: 28),
 
-            const Text(
-              'Select Payment Method',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+            const Text('Select Payment Method', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             Column(
               children: [
                 _buildPaymentMethodTile('Razorpay', 'Pay securely via Cards, Netbanking, or UPI', Icons.payment, theme),
                 const SizedBox(height: 8),
-                _buildPaymentMethodTile('PhonePe', 'Pay instantly via PhonePe App or UPI ID', Icons.account_balance_wallet, theme),
-                const SizedBox(height: 8),
-                _buildPaymentMethodTile('Wallet', 'Use Trimly Wallet Cashbacks (Balance: ₹450)', Icons.wallet, theme),
+                _buildPaymentMethodTile('Wallet', 'Use Trimly Wallet balance', Icons.wallet, theme),
               ],
             ),
-            
-            const SizedBox(height: 140), // gap for button
+            const SizedBox(height: 140),
           ],
         ),
       ),
@@ -320,13 +317,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: theme.cardColor,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -4),
-            ),
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -4))],
         ),
         child: SafeArea(
           child: ElevatedButton(
@@ -335,85 +326,25 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
               backgroundColor: theme.colorScheme.primary,
               foregroundColor: Colors.white,
               minimumSize: const Size(double.infinity, 54),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             child: _isBooking
                 ? const SizedBox(
                     height: 24,
                     width: 24,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                   )
-                : const Text(
-                    'Confirm Appointment',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                : const Text('Confirm Appointment', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTimeSlotSection(String title, List<String> slots, ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.grey, fontSize: 14),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: slots.map((slot) {
-            final isSelected = _selectedTime == slot;
-            return GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedTime = slot;
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? theme.colorScheme.primary.withOpacity(0.08)
-                      : theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isSelected
-                        ? theme.colorScheme.primary
-                        : Colors.grey.shade300,
-                  ),
-                ),
-                child: Text(
-                  slot,
-                  style: TextStyle(
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    color: isSelected ? theme.colorScheme.primary : Colors.black87,
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
   Widget _buildPaymentMethodTile(String title, String subtitle, IconData icon, ThemeData theme) {
     final isSelected = _selectedPaymentMethod == title;
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedPaymentMethod = title;
-        });
-      },
+      onTap: () => setState(() => _selectedPaymentMethod = title),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -438,10 +369,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                 ],
               ),
             ),
-            if (isSelected)
-              Icon(Icons.check_circle, color: theme.colorScheme.primary)
-            else
-              const Icon(Icons.circle_outlined, color: Colors.grey),
+            if (isSelected) Icon(Icons.check_circle, color: theme.colorScheme.primary) else const Icon(Icons.circle_outlined, color: Colors.grey),
           ],
         ),
       ),

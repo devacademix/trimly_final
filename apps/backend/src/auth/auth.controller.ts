@@ -1,9 +1,15 @@
 import { Controller, Post, Body, HttpCode, HttpStatus, UnauthorizedException, Get, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { UserRole, ApiResponse, AuthSession, AuthUser } from '@trimly/types';
+import { ApiResponse, AuthSession, AuthUser } from '@trimly/types';
 import { ApiTags, ApiOperation, ApiResponse as ApiSwaggerResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { RegisterDto, LoginDto, SendOtpDto, VerifyOtpDto, RefreshTokenDto } from './dto/auth.dto';
+
+// Tighter limit than the app-wide default for brute-forceable credential
+// endpoints: 5 attempts per minute per client.
+const BRUTE_FORCE_THROTTLE = { default: { limit: 5, ttl: 60000 } };
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -13,9 +19,7 @@ export class AuthController {
   @Post('register')
   @ApiOperation({ summary: 'Register a new user' })
   @ApiSwaggerResponse({ status: 201, description: 'User successfully registered' })
-  async register(
-    @Body() dto: { email: string; password?: string; fullName: string; role: UserRole },
-  ): Promise<ApiResponse<AuthUser>> {
+  async register(@Body() dto: RegisterDto): Promise<ApiResponse<AuthUser>> {
     const user = await this.authService.register(dto);
     return {
       success: true,
@@ -24,12 +28,11 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle(BRUTE_FORCE_THROTTLE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiSwaggerResponse({ status: 200, description: 'Authentication token details' })
-  async login(
-    @Body() dto: { email: string; password?: string },
-  ): Promise<ApiResponse<AuthSession>> {
+  async login(@Body() dto: LoginDto): Promise<ApiResponse<AuthSession>> {
     const session = await this.authService.login(dto);
     return {
       success: true,
@@ -38,11 +41,10 @@ export class AuthController {
   }
 
   @Post('otp/send')
+  @Throttle(BRUTE_FORCE_THROTTLE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send OTP code to phone number' })
-  async sendOtp(
-    @Body() dto: { phone: string },
-  ): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  async sendOtp(@Body() dto: SendOtpDto): Promise<ApiResponse<{ success: boolean; message: string }>> {
     const res = await this.authService.sendOtp(dto.phone);
     return {
       success: true,
@@ -51,11 +53,10 @@ export class AuthController {
   }
 
   @Post('otp/verify')
+  @Throttle(BRUTE_FORCE_THROTTLE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify OTP code and authenticate user' })
-  async verifyOtp(
-    @Body() dto: { phone: string; otp: string },
-  ): Promise<ApiResponse<AuthSession>> {
+  async verifyOtp(@Body() dto: VerifyOtpDto): Promise<ApiResponse<AuthSession>> {
     const session = await this.authService.verifyOtp(dto.phone, dto.otp);
     return {
       success: true,
@@ -66,9 +67,7 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh active login session' })
-  async refresh(
-    @Body() dto: { refreshToken: string },
-  ): Promise<ApiResponse<AuthSession>> {
+  async refresh(@Body() dto: RefreshTokenDto): Promise<ApiResponse<AuthSession>> {
     const session = await this.authService.refreshSession(dto.refreshToken);
     return {
       success: true,
@@ -79,9 +78,7 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Revoke active refresh token/session' })
-  async logout(
-    @Body() dto: { refreshToken: string },
-  ): Promise<ApiResponse<{ success: boolean }>> {
+  async logout(@Body() dto: RefreshTokenDto): Promise<ApiResponse<{ success: boolean }>> {
     const res = await this.authService.logout(dto.refreshToken);
     return {
       success: true,

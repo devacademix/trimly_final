@@ -8,6 +8,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { TenantGuard } from '../common/guards/tenant.guard';
 import { TenantId } from '../common/decorators/tenant.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { WithdrawDto } from './dto/wallet.dto';
 
 @ApiTags('Wallets & Payout Settlements')
 @ApiBearerAuth()
@@ -39,7 +40,7 @@ export class WalletController {
   @ApiOperation({ summary: 'Request withdrawal/payout from wallet' })
   async withdraw(
     @CurrentUser() user: any,
-    @Body() dto: { amount: number },
+    @Body() dto: WithdrawDto,
   ): Promise<ApiResponse<any>> {
     const res = await this.walletService.requestWithdrawal(user.id, dto.amount);
     return {

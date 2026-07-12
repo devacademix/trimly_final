@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../core/providers/data_providers.dart';
 
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _darkMode = false;
   String _selectedLanguage = 'English';
-  final double _walletBalance = 450.0;
-  final int _loyaltyPoints = 280;
 
   final List<String> _savedAddresses = [
     'Home: Flat 402, Prestige Heights, Bangalore',
@@ -52,7 +53,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showReferralDialog() {
+  void _showReferralDialog(String? referralCode) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -64,7 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const Icon(Icons.card_giftcard, size: 48, color: Colors.pink),
             const SizedBox(height: 12),
             const Text(
-              'Share this code with friends to get ₹100 cashback when they complete their first booking!',
+              'Share this code with friends to get rewarded when they complete their first booking!',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey),
             ),
@@ -75,9 +76,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 color: Colors.grey[200],
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Text(
-                'TRIMLY100',
-                style: TextStyle(
+              child: Text(
+                referralCode ?? '—',
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1.5,
@@ -99,6 +100,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final user = ref.watch(authControllerProvider).user;
+    final walletAsync = ref.watch(walletDetailsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -108,7 +111,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // User Header
+            // User Header — real signed-in account
             Row(
               children: [
                 const CircleAvatar(
@@ -120,13 +123,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Sarah Jenkins',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      Text(
+                        user?.displayName ?? 'Trimly customer',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'customer@trimly.test',
+                        user?.email ?? user?.phone ?? '',
                         style: TextStyle(color: Colors.grey[600]),
                       ),
                     ],
@@ -156,37 +159,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: TextStyle(color: Colors.white70, fontSize: 13),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          '₹${_walletBalance.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
+                        walletAsync.when(
+                          loading: () => const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          ),
+                          error: (_, _) => const Text('—', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                          data: (wallet) => Text(
+                            '₹${wallet.balance.toStringAsFixed(2)}',
+                            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.star, color: Colors.amber, size: 18),
-                        const SizedBox(width: 4),
-                        Text(
-                          '$_loyaltyPoints Points',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  const Icon(Icons.account_balance_wallet_outlined, color: Colors.white70, size: 28),
                 ],
               ),
             ),
@@ -260,10 +248,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 children: [
                   ListTile(
+                    leading: const Icon(Icons.chat_bubble_outline),
+                    title: const Text('Messages'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/chat'),
+                  ),
+                  ListTile(
                     leading: const Icon(Icons.share_outlined),
                     title: const Text('Refer & Earn Program'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: _showReferralDialog,
+                    onTap: () => _showReferralDialog(user?.referralCode),
                   ),
                   ListTile(
                     leading: const Icon(Icons.support_agent_outlined),
@@ -283,7 +277,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             // Logout
             ElevatedButton.icon(
-              onPressed: () => context.go('/login'),
+              onPressed: () => ref.read(authControllerProvider.notifier).logout(),
               icon: const Icon(Icons.logout),
               label: const Text('Logout'),
               style: ElevatedButton.styleFrom(

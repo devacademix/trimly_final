@@ -1,11 +1,16 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationService } from '../notifications/notification.service';
 import crypto from 'crypto';
 import { PaymentStatus, PaymentMethod, BookingStatus } from '@trimly/database';
+import { UserRole } from '@trimly/types';
 
 @Injectable()
 export class PaymentService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationService: NotificationService,
+  ) {}
 
   // Resolve active commission percentage for a tenant
   async getCommissionPct(tenantId: string): Promise<number> {
@@ -42,12 +47,19 @@ export class PaymentService {
   }
 
   // Create checkout session for booking
-  async createBookingCheckout(tenantId: string, bookingId: string) {
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId },
+  async createBookingCheckout(
+    tenantId: string,
+    bookingId: string,
+    user: { id: string; role: UserRole },
+  ) {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, tenantId },
     });
     if (!booking) {
       throw new NotFoundException('Booking not found');
+    }
+    if (user.role === UserRole.CUSTOMER && booking.customerId !== user.id) {
+      throw new ForbiddenException('You do not have access to this booking');
     }
 
     const amount = Number(booking.totalPrice);
@@ -65,15 +77,23 @@ export class PaymentService {
   }
 
   // Process payment captured webhook
-  async handleWebhook(signature: string, payload: any) {
+  async handleWebhook(signature: string, rawBody: Buffer, payload: any) {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-    if (secret && signature) {
-      const shasum = crypto.createHmac('sha256', secret);
-      shasum.update(JSON.stringify(payload));
-      const digest = shasum.digest('hex');
-      if (digest !== signature) {
-        throw new BadRequestException('Invalid webhook signature');
-      }
+    if (!secret) {
+      throw new BadRequestException('Webhook secret not configured');
+    }
+    if (!signature || !rawBody) {
+      throw new BadRequestException('Missing webhook signature');
+    }
+
+    const digest = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+    const digestBuf = Buffer.from(digest, 'hex');
+    const signatureBuf = Buffer.from(signature, 'hex');
+    if (
+      digestBuf.length !== signatureBuf.length ||
+      !crypto.timingSafeEqual(digestBuf, signatureBuf)
+    ) {
+      throw new BadRequestException('Invalid webhook signature');
     }
 
     const event = payload.event;
@@ -88,40 +108,45 @@ export class PaymentService {
       if (bookingId && tenantId) {
         const splits = await this.calculateSplit(tenantId, totalAmount);
 
-        await this.prisma.$transaction(async (tx) => {
+        const payment = await this.prisma.$transaction(async (tx) => {
           // Check if payment already exists
           const existing = await tx.payment.findUnique({
             where: { referenceId },
           });
+          if (existing) return null;
 
-          if (!existing) {
-            await tx.payment.create({
-              data: {
-                bookingId,
-                paymentMethod: PaymentMethod.RAZORPAY,
-                paymentStatus: PaymentStatus.CAPTURED,
-                amount: totalAmount,
-                commissionFee: splits.commissionFee,
-                taxFee: splits.taxFee,
-                salonCut: splits.salonCut,
-                referenceId,
-              },
-            });
+          const created = await tx.payment.create({
+            data: {
+              bookingId,
+              paymentMethod: PaymentMethod.RAZORPAY,
+              paymentStatus: PaymentStatus.CAPTURED,
+              amount: totalAmount,
+              commissionFee: splits.commissionFee,
+              taxFee: splits.taxFee,
+              salonCut: splits.salonCut,
+              referenceId,
+            },
+          });
 
-            await tx.booking.update({
-              where: { id: bookingId },
-              data: { status: BookingStatus.CONFIRMED },
-            });
+          await tx.booking.update({
+            where: { id: bookingId },
+            data: { status: BookingStatus.CONFIRMED },
+          });
 
-            await tx.bookingHistory.create({
-              data: {
-                bookingId,
-                status: BookingStatus.CONFIRMED,
-                notes: `Payment captured. Salon Cut: INR ${splits.salonCut}, Commission: INR ${splits.commissionFee}`,
-              },
-            });
-          }
+          await tx.bookingHistory.create({
+            data: {
+              bookingId,
+              status: BookingStatus.CONFIRMED,
+              notes: `Payment captured. Salon Cut: INR ${splits.salonCut}, Commission: INR ${splits.commissionFee}`,
+            },
+          });
+
+          return created;
         });
+
+        if (payment) {
+          this.notificationService.notifyPaymentSuccess(payment.id).catch(() => undefined);
+        }
       }
     }
 
@@ -129,10 +154,17 @@ export class PaymentService {
   }
 
   // Process Refund
-  async refundPayment(paymentId: string) {
-    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+  async refundPayment(paymentId: string, user: { role: UserRole; tenantId?: string | null }) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: { booking: true },
+    });
     if (!payment) {
       throw new NotFoundException('Payment record not found');
+    }
+
+    if (user.role !== UserRole.SUPER_ADMIN && payment.booking.tenantId !== user.tenantId) {
+      throw new ForbiddenException('You do not have access to this payment');
     }
 
     if (payment.paymentStatus !== PaymentStatus.CAPTURED) {

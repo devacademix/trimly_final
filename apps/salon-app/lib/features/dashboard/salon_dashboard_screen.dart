@@ -1,49 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/models/booking.dart';
+import '../../core/network/api_exception.dart';
+import '../../core/providers/api_providers.dart';
+import '../../core/providers/data_providers.dart';
 
-class SalonDashboardScreen extends StatefulWidget {
+class SalonDashboardScreen extends ConsumerStatefulWidget {
   const SalonDashboardScreen({super.key});
 
   @override
-  State<SalonDashboardScreen> createState() => _SalonDashboardScreenState();
+  ConsumerState<SalonDashboardScreen> createState() => _SalonDashboardScreenState();
 }
 
-class _SalonDashboardScreenState extends State<SalonDashboardScreen> {
+class _SalonDashboardScreenState extends ConsumerState<SalonDashboardScreen> {
   bool _isShopOpen = true;
 
-  final List<Map<String, dynamic>> _upcomingBookings = [
-    {
-      'id': 'b1',
-      'customerName': 'Sarah Connor',
-      'service': 'Classic Haircut & Styling',
-      'time': '10:30 AM',
-      'price': '₹499',
-      'specialist': 'Alex Rivera',
-      'status': 'Confirmed',
-    },
-    {
-      'id': 'b2',
-      'customerName': 'David Miller',
-      'service': 'Beard Grooming & Shave',
-      'time': '11:15 AM',
-      'price': '₹299',
-      'specialist': 'Rohan Das',
-      'status': 'Confirmed',
-    },
-    {
-      'id': 'b3',
-      'customerName': 'Neha Sharma',
-      'service': 'Gel Manicure',
-      'time': '01:00 PM',
-      'price': '₹799',
-      'specialist': 'Mia Chen',
-      'status': 'Pending Approval',
-    },
-  ];
+  Future<void> _updateStatus(Booking booking, BookingStatus status) async {
+    try {
+      await ref.read(bookingRepositoryProvider).updateStatus(booking.id, status);
+      ref.invalidate(bookingsListProvider);
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is ApiException ? e.message : 'Failed to update booking';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final bookingsAsync = ref.watch(bookingsListProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A), // Slate Dark background
@@ -98,7 +84,7 @@ class _SalonDashboardScreenState extends State<SalonDashboardScreen> {
                     'Today\'s Earnings',
                     '₹6,450',
                     Icons.currency_rupee,
-                    Colors.emerald,
+                    Colors.green,
                   ),
                 ),
               ],
@@ -135,124 +121,131 @@ class _SalonDashboardScreenState extends State<SalonDashboardScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Today's Bookings List
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _upcomingBookings.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final booking = _upcomingBookings[index];
-                final isPending = booking['status'] == 'Pending Approval';
-                return Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.blueGrey.shade800),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            booking['customerName']!,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: isPending
-                                  ? Colors.amber.withOpacity(0.1)
-                                  : Colors.green.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              booking['status']!,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: isPending ? Colors.amber : Colors.green,
-                              ),
-                            ),
-                          ),
-                        ],
+            // Upcoming bookings (pending/confirmed, soonest first)
+            bookingsAsync.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator(color: Color(0xFF6366F1))),
+              ),
+              error: (error, _) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text('Could not load bookings: $error', style: const TextStyle(color: Colors.blueGrey)),
+              ),
+              data: (bookings) {
+                final upcoming = bookings
+                    .where((b) => b.status == BookingStatus.pending || b.status == BookingStatus.confirmed)
+                    .toList()
+                  ..sort((a, b) => a.startTime.compareTo(b.startTime));
+                final visible = upcoming.take(5).toList();
+
+                if (visible.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Text('No upcoming appointments.', style: TextStyle(color: Colors.blueGrey)),
+                  );
+                }
+
+                return ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: visible.length,
+                  separatorBuilder: (context, index) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final booking = visible[index];
+                    final isPending = booking.status == BookingStatus.pending;
+                    return Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.blueGrey.shade800),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        booking['service']!,
-                        style: TextStyle(color: Colors.blueGrey.shade300, fontSize: 14),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Icon(Icons.access_time, size: 16, color: Colors.blueGrey),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${booking['time']} • ${booking['specialist']}',
-                                style: const TextStyle(color: Colors.blueGrey, fontSize: 13),
+                              Expanded(
+                                child: Text(
+                                  booking.customerName ?? 'Customer',
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isPending ? Colors.amber.withOpacity(0.1) : Colors.green.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  booking.status.label,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: isPending ? Colors.amber : Colors.green,
+                                  ),
+                                ),
                               ),
                             ],
                           ),
-                          Text(
-                            booking['price']!,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
+                          const SizedBox(height: 8),
+                          Text(booking.serviceName, style: TextStyle(color: Colors.blueGrey.shade300, fontSize: 14)),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.access_time, size: 16, color: Colors.blueGrey),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${TimeOfDay.fromDateTime(booking.startTime).format(context)}'
+                                    '${booking.staffName != null ? ' • ${booking.staffName}' : ''}',
+                                    style: const TextStyle(color: Colors.blueGrey, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                '₹${booking.totalPrice.toStringAsFixed(0)}',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      if (isPending) ...[
-                        const Divider(height: 24, color: Colors.blueGrey),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () {},
-                                style: OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: Colors.redAccent),
-                                  foregroundColor: Colors.redAccent,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
+                          if (isPending) ...[
+                            const Divider(height: 24, color: Colors.blueGrey),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => _updateStatus(booking, BookingStatus.cancelled),
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(color: Colors.redAccent),
+                                      foregroundColor: Colors.redAccent,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: const Text('Decline'),
                                   ),
                                 ),
-                                child: const Text('Decline'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    booking['status'] = 'Confirmed';
-                                  });
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () => _updateStatus(booking, BookingStatus.confirmed),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: const Text('Accept'),
                                   ),
                                 ),
-                                child: const Text('Accept'),
-                              ),
+                              ],
                             ),
                           ],
-                        ),
-                      ],
-                    ],
-                  ),
+                        ],
+                      ),
+                    );
+                  },
                 );
               },
             ),

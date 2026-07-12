@@ -1,36 +1,42 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/models/user_role.dart';
+import '../../core/providers/auth_provider.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController(text: 'customer@trimly.test');
   final _passwordController = TextEditingController(text: 'Password123');
   bool _obscurePassword = true;
   bool _isLoading = false;
 
-  void _handleLogin() {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
 
-      // Simulate a quick network sign-in delay
-      Future.delayed(const Duration(seconds: 1), () {
-        setState(() {
-          _isLoading = false;
-        });
-        if (mounted) {
-          context.go('/home');
-        }
-      });
+    setState(() => _isLoading = true);
+
+    final success = await ref.read(authControllerProvider.notifier).login(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+          expectedRole: UserRole.customer,
+        );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (!success) {
+      final message = ref.read(authControllerProvider).errorMessage ?? 'Login failed';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
+    // On success, the router's redirect (driven by authControllerProvider)
+    // takes over and navigates to /home.
   }
 
   @override
@@ -79,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                
+
                 // Welcome Text
                 Center(
                   child: Text(
@@ -185,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                 ),
-                
+
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

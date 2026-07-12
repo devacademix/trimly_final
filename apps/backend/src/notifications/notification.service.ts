@@ -1,9 +1,47 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { initializeApp, cert, type App } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
+import * as fs from 'fs';
 
 @Injectable()
 export class NotificationService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(NotificationService.name);
+  private readonly firebaseApp: App | null;
+
+  constructor(private prisma: PrismaService) {
+    this.firebaseApp = this.initFirebase();
+  }
+
+  // Lazily initializes Firebase Admin from a service-account JSON file (see
+  // FIREBASE_CREDENTIALS_PATH in .env.example). If it isn't configured, push
+  // sends fall back to a simulated log line — same graceful-degradation
+  // pattern as sendEmail/sendSMS/sendWhatsApp below.
+  private initFirebase(): App | null {
+    const credentialsPath = process.env.FIREBASE_CREDENTIALS_PATH;
+    if (!credentialsPath) {
+      return null;
+    }
+    try {
+      if (!fs.existsSync(credentialsPath)) {
+        this.logger.warn(`FIREBASE_CREDENTIALS_PATH is set but no file exists at ${credentialsPath}`);
+        return null;
+      }
+      const serviceAccount = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+      return initializeApp({
+        credential: cert(serviceAccount),
+        projectId: process.env.FIREBASE_PROJECT_ID,
+      });
+    } catch (err) {
+      this.logger.warn(`Failed to initialize Firebase Admin SDK: ${(err as Error).message}`);
+      return null;
+    }
+  }
+
+  // Saves the current device's FCM token so sendPush() can target it.
+  async registerDeviceToken(userId: string, token: string): Promise<void> {
+    await this.prisma.user.update({ where: { id: userId }, data: { fcmToken: token } });
+  }
 
   // 1. Core Transports
   async sendEmail(to: string, subject: string, body: string): Promise<boolean> {
@@ -34,9 +72,27 @@ export class NotificationService {
   }
 
   async sendPush(userId: string, title: string, body: string): Promise<boolean> {
-    console.info(`[PUSH SENDER] User: ${userId} | Title: ${title} | Body: ${body}`);
-    // Real Firebase Cloud Messaging (FCM) payload dispatch would go here.
-    return true;
+    if (!this.firebaseApp) {
+      console.info(`[PUSH SENDER - SIMULATED, no Firebase credentials configured] User: ${userId} | Title: ${title} | Body: ${body}`);
+      return true;
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { fcmToken: true } });
+    if (!user?.fcmToken) {
+      this.logger.debug(`Skipping push for user ${userId}: no registered device token`);
+      return false;
+    }
+
+    try {
+      await getMessaging(this.firebaseApp).send({
+        token: user.fcmToken,
+        notification: { title, body },
+      });
+      return true;
+    } catch (err) {
+      this.logger.warn(`Failed to send push to user ${userId}: ${(err as Error).message}`);
+      return false;
+    }
   }
 
   // 2. Booking Triggers

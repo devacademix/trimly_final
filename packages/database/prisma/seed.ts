@@ -60,6 +60,61 @@ async function main() {
   });
 
   console.info('✔ Seeded platform settings (defaultCommissionPct=15, currency=INR)');
+
+  // Demo tenant + salon-owner + customer — lets the customer-app and
+  // salon-app login screens (which prefill these exact credentials) log in
+  // against a freshly seeded local backend without any manual setup.
+  const demoTenant = await prisma.tenant.upsert({
+    where: { slug: 'trimly-demo-salon' },
+    update: {},
+    create: {
+      slug: 'trimly-demo-salon',
+      name: 'Trimly Demo Salon',
+      status: 'APPROVED',
+      isActive: true,
+      ownerEmail: 'owner@trimly.test',
+      primaryCity: 'Bengaluru',
+    },
+  });
+
+  const ownerPasswordHash = await bcrypt.hash('ChangeMe!2026', 12);
+  await prisma.user.upsert({
+    where: { email: 'owner@trimly.test' },
+    update: { role: UserRole.SALON_OWNER, status: UserStatus.ACTIVE, tenantId: demoTenant.id, passwordHash: ownerPasswordHash },
+    create: {
+      email: 'owner@trimly.test',
+      phone: '+919999999901',
+      phoneNormalized: '+919999999901',
+      passwordHash: ownerPasswordHash,
+      fullName: 'Demo Salon Owner',
+      role: UserRole.SALON_OWNER,
+      status: UserStatus.ACTIVE,
+      authProvider: AuthProvider.EMAIL,
+      tenantId: demoTenant.id,
+      emailVerifiedAt: new Date(),
+      phoneVerifiedAt: new Date(),
+    },
+  });
+  console.info('✔ Seeded demo salon owner: owner@trimly.test / ChangeMe!2026');
+
+  const customerPasswordHash = await bcrypt.hash('Password123', 12);
+  await prisma.user.upsert({
+    where: { email: 'customer@trimly.test' },
+    update: { role: UserRole.CUSTOMER, status: UserStatus.ACTIVE, passwordHash: customerPasswordHash },
+    create: {
+      email: 'customer@trimly.test',
+      phone: '+919999999902',
+      phoneNormalized: '+919999999902',
+      passwordHash: customerPasswordHash,
+      fullName: 'Demo Customer',
+      role: UserRole.CUSTOMER,
+      status: UserStatus.ACTIVE,
+      authProvider: AuthProvider.EMAIL,
+      emailVerifiedAt: new Date(),
+      phoneVerifiedAt: new Date(),
+    },
+  });
+  console.info('✔ Seeded demo customer: customer@trimly.test / Password123');
 }
 
 main()

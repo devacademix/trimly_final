@@ -1,0 +1,54 @@
+name: Admin CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "apps/admin/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/admin.yml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "apps/admin/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/admin.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      NEXT_PUBLIC_API_URL: https://api.trimly.example.com/api/v1
+      NEXT_PUBLIC_APP_NAME: Trimly Admin
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm --filter @trimly/admin lint
+
+      - name: Build
+        run: pnpm --filter @trimly/admin build
+
+      - name: Validate production Docker image builds
+        run: docker build -f apps/admin/Dockerfile -t trimly-admin:ci .

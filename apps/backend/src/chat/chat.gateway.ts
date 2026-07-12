@@ -8,22 +8,69 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { JwtService } from '@nestjs/jwt';
+import { SkipThrottle } from '@nestjs/throttler';
 import { ChatService } from './chat.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { UserStatus } from '@trimly/types';
 
+// The global ThrottlerGuard is HTTP-request/response shaped and doesn't apply
+// cleanly to Socket.IO's message events; skip it here rather than risk it
+// breaking realtime chat.
+@SkipThrottle()
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    // Evaluated per-connection (not at class-decoration time), so this always
+    // sees CORS_ORIGINS after ConfigModule has loaded the .env file.
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      const allowed = (process.env.CORS_ORIGINS || 'http://localhost:3000')
+        .split(',')
+        .map((o) => o.trim());
+      if (!origin || allowed.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
   },
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
-  constructor(private chatService: ChatService) {}
+  constructor(
+    private chatService: ChatService,
+    private jwtService: JwtService,
+    private prisma: PrismaService,
+  ) {}
 
-  handleConnection(client: Socket) {
-    const userId = client.handshake.query.userId as string;
-    console.info(`[CHAT GATEWAY] Client connected: ${client.id} | User: ${userId}`);
+  // Authenticate the socket using the same access token used for REST calls.
+  // Client is expected to connect with `io(url, { auth: { token } })`.
+  async handleConnection(client: Socket) {
+    try {
+      const authToken = client.handshake.auth?.token as string | undefined;
+      const headerToken = client.handshake.headers.authorization?.toString().replace(/^Bearer\s+/i, '');
+      const token = authToken || headerToken;
+
+      if (!token) {
+        throw new Error('Missing auth token');
+      }
+
+      const payload = await this.jwtService.verifyAsync(token, {
+        secret: process.env.JWT_ACCESS_SECRET,
+      });
+
+      const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+      if (!user || user.status !== UserStatus.ACTIVE) {
+        throw new Error('User not found or inactive');
+      }
+
+      client.data.userId = user.id;
+    } catch {
+      console.warn(`[CHAT GATEWAY] Rejected unauthenticated connection: ${client.id}`);
+      client.disconnect(true);
+    }
   }
 
   handleDisconnect(client: Socket) {
@@ -31,23 +78,37 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('join_room')
-  handleJoinRoom(
+  async handleJoinRoom(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { roomId: string },
   ) {
+    const userId = client.data.userId as string | undefined;
+    if (!userId) return;
+
+    const isParticipant = await this.chatService.isRoomParticipant(payload.roomId, userId);
+    if (!isParticipant) {
+      console.warn(`[CHAT GATEWAY] User ${userId} denied join to room ${payload.roomId}`);
+      return;
+    }
+
     client.join(payload.roomId);
-    console.info(`[CHAT GATEWAY] Client ${client.id} joined room ${payload.roomId}`);
   }
 
   @SubscribeMessage('send_message')
   async handleSendMessage(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { roomId: string; senderId: string; text: string },
+    @MessageBody() payload: { roomId: string; text: string },
   ) {
-    // Save to Database
-    const msg = await this.chatService.saveMessage(payload.roomId, payload.senderId, payload.text);
+    const userId = client.data.userId as string | undefined;
+    if (!userId) return;
 
-    // Broadcast to room
+    const isParticipant = await this.chatService.isRoomParticipant(payload.roomId, userId);
+    if (!isParticipant) {
+      return;
+    }
+
+    // senderId always comes from the authenticated socket, never the client payload.
+    const msg = await this.chatService.saveMessage(payload.roomId, userId, payload.text);
     this.server.to(payload.roomId).emit('message_received', msg);
   }
 }
