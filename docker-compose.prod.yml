@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: trimly-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: trimly
+      POSTGRES_PASSWORD: secure_postgres_password
+      POSTGRES_DB: trimly
+    ports:
+      - "5434:5432"
+    volumes:
+      - pg_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trimly -d trimly"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trimly-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: trimly-redis
+    restart: always
+    command: ["redis-server", "--requirepass", "secure_redis_password", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_prod_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "secure_redis_password", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - trimly-net
+
+  migration:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+      target: builder
+    container_name: trimly-migration
+    environment:
+      DATABASE_URL: "postgresql://trimly:secure_postgres_password@postgres:5432/trimly?schema=public"
+      DIRECT_DATABASE_URL: "postgresql://trimly:secure_postgres_password@postgres:5432/trimly?schema=public"
+    command: >
+      sh -c "pnpm --filter @trimly/database db:generate && pnpm --filter @trimly/database exec prisma db push --accept-data-loss && pnpm --filter @trimly/database db:seed"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - trimly-net
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: trimly-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://trimly:secure_postgres_password@postgres:5432/trimly?schema=public"
+      REDIS_URL: "redis://:secure_redis_password@redis:6379"
+      JWT_ACCESS_SECRET: "your_production_secure_jwt_secret"
+      RAZORPAY_KEY_ID: "your_razorpay_live_key"
+      RAZORPAY_KEY_SECRET: "your_razorpay_live_secret"
+    networks:
+      - trimly-net
+
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://trimly-backend:4000/api/v1
+    container_name: trimly-admin
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://trimly-backend:4000/api/v1"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - trimly-net
+
+volumes:
+  pg_prod_data:
+  redis_prod_data:
+
+networks:
+  trimly-net:
+    driver: bridge

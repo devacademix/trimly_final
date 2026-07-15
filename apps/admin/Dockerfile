@@ -15,6 +15,8 @@ RUN pnpm install --frozen-lockfile
 # Stage 2: build
 FROM deps AS builder
 WORKDIR /app
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY . .
 RUN pnpm --filter @trimly/admin build
 
