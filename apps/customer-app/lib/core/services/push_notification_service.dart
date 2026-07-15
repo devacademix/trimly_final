@@ -1,15 +1,20 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../network/api_client.dart';
+import '../providers/data_providers.dart';
+import '../../main.dart';
 
 /// Registers this device for Firebase Cloud Messaging and hands the token to
 /// the backend (`POST /notifications/device-token`) so booking/payment
 /// status changes can push straight to the customer's phone.
 class PushNotificationService {
   final ApiClient apiClient;
+  final Ref ref;
 
-  PushNotificationService({required this.apiClient});
+  PushNotificationService({required this.apiClient, required this.ref});
 
   bool _initialized = false;
 
@@ -39,6 +44,36 @@ class PushNotificationService {
       // in-app banner; for now they're just logged so nothing is lost.
       FirebaseMessaging.onMessage.listen((message) {
         debugPrint('[PUSH] Foreground message: ${message.notification?.title} — ${message.notification?.body}');
+
+        final title = message.notification?.title ?? 'Booking Update';
+        final body = message.notification?.body ?? '';
+
+        scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.notifications_active, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                      Text(body, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.indigoAccent,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+
+        // Auto refresh bookings tab data
+        ref.invalidate(myBookingsProvider);
       });
     } catch (e) {
       // Push is a nice-to-have — never let setup failures affect the rest

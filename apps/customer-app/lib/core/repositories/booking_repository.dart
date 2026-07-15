@@ -7,14 +7,21 @@ class AvailabilityResult {
   final bool isOpen;
   final String? reason;
   final List<String> slots;
+  final List<String> bookedSlots;
 
-  const AvailabilityResult({required this.isOpen, this.reason, this.slots = const []});
+  const AvailabilityResult({
+    required this.isOpen,
+    this.reason,
+    this.slots = const [],
+    this.bookedSlots = const [],
+  });
 
   factory AvailabilityResult.fromJson(Map<String, dynamic> json) {
     return AvailabilityResult(
       isOpen: json['isOpen'] as bool? ?? false,
       reason: json['reason'] as String?,
       slots: (json['slots'] as List?)?.cast<String>() ?? const [],
+      bookedSlots: (json['bookedSlots'] as List?)?.cast<String>() ?? const [],
     );
   }
 }
@@ -31,7 +38,7 @@ class CheckoutSession {
     return CheckoutSession(
       gateway: json['gateway'] as String,
       orderId: json['orderId'] as String,
-      amount: (json['amount'] as num).toDouble(),
+      amount: double.parse(json['amount'].toString()),
       keyId: json['keyId'] as String,
     );
   }

@@ -55,7 +55,7 @@ export class BookingController {
     @CurrentUser() user: any,
     @Body() dto: CreateBookingDto,
   ): Promise<ApiResponse<any>> {
-    const booking = await this.bookingService.createBooking(tenantId, user.id, dto);
+    const booking = await this.bookingService.createBooking(tenantId, user.id, user.role, dto);
     return {
       success: true,
       data: booking,

@@ -22,7 +22,6 @@ class OnboardingRepository {
     required String ownerName,
     required String salonName,
     required String email,
-    required String password,
     required String businessCategory,
   }) async {
     try {
@@ -30,7 +29,6 @@ class OnboardingRepository {
         'ownerName': ownerName,
         'salonName': salonName,
         'email': email,
-        'password': password,
         'businessCategory': businessCategory,
       });
       final data = response.data['data'] as Map<String, dynamic>;

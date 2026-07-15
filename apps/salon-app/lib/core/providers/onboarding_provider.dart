@@ -27,6 +27,7 @@ class OnboardingState {
   final bool isLoading;
   final String? errorMessage;
   final String? tenantId;
+  final String? tenantStatus;
   final Map<String, dynamic> planData;
   final List<dynamic> plans;
 
@@ -35,6 +36,7 @@ class OnboardingState {
     this.isLoading = false,
     this.errorMessage,
     this.tenantId,
+    this.tenantStatus,
     this.planData = const {},
     this.plans = const [],
   });
@@ -44,6 +46,7 @@ class OnboardingState {
     bool? isLoading,
     String? errorMessage,
     String? tenantId,
+    String? tenantStatus,
     Map<String, dynamic>? planData,
     List<dynamic>? plans,
   }) {
@@ -52,6 +55,7 @@ class OnboardingState {
       isLoading: isLoading ?? this.isLoading,
       errorMessage: errorMessage,
       tenantId: tenantId ?? this.tenantId,
+      tenantStatus: tenantStatus ?? this.tenantStatus,
       planData: planData ?? this.planData,
       plans: plans ?? this.plans,
     );
@@ -70,9 +74,11 @@ class OnboardingController extends Notifier<OnboardingState> {
       final status = await repo.getStatus();
       final stepStr = status['onboardingStep'] as String? ?? 'WELCOME';
       final mapped = _mapStepFromApi(stepStr);
+      final tenant = status['tenant'] as Map<String, dynamic>?;
       state = state.copyWith(
         currentStep: mapped,
         tenantId: status['tenantId'] as String?,
+        tenantStatus: tenant != null ? tenant['status'] as String? : null,
       );
     } catch (_) {
       // Ignore
@@ -167,7 +173,6 @@ class OnboardingController extends Notifier<OnboardingState> {
     required String ownerName,
     required String salonName,
     required String email,
-    required String password,
     required String businessCategory,
   }) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
@@ -177,7 +182,6 @@ class OnboardingController extends Notifier<OnboardingState> {
         ownerName: ownerName,
         salonName: salonName,
         email: email,
-        password: password,
         businessCategory: businessCategory,
       );
       state = state.copyWith(

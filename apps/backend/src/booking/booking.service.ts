@@ -19,14 +19,30 @@ export class BookingService {
     private notificationService: NotificationService,
   ) {}
 
+  // Helper to shift a Date to UTC so that UTC methods act as local IST (+05:30)
+  private getISTDate(date: Date): Date {
+    return new Date(date.getTime() + 330 * 60 * 1000);
+  }
+
   // Calculate live slot availability for a salon branch & date
   async getAvailability(tenantId: string, branchId: string, dateStr: string, staffId?: string) {
-    const targetDate = new Date(dateStr);
-    const dayOfWeek = targetDate.getDay(); // 0 = Sunday, 6 = Saturday
+    // Treat dateStr (e.g. "2026-07-15") as midnight in Asia/Kolkata (IST)
+    const targetDateStr = dateStr.includes('+') || dateStr.endsWith('Z') 
+      ? dateStr 
+      : `${dateStr.split('T')[0]}T00:00:00.000+05:30`;
+    const targetDate = new Date(targetDateStr);
+    const istTarget = this.getISTDate(targetDate);
+    const dayOfWeek = istTarget.getUTCDay(); // 0 = Sunday, 6 = Saturday
 
-    // 1. Check if the date is a holiday
+    // 1. Check if the date is a holiday (compare YYYY-MM-DD boundaries in IST)
+    const startOfDay = new Date(targetDate.getTime());
+    const endOfDay = new Date(targetDate.getTime() + 24 * 60 * 60 * 1000 - 1);
+
     const holiday = await this.prisma.holiday.findFirst({
-      where: { tenantId, date: targetDate },
+      where: { 
+        tenantId,
+        date: { gte: startOfDay, lte: endOfDay }
+      },
     });
     if (holiday) {
       return { isOpen: false, reason: 'Holiday', slots: [] };
@@ -45,16 +61,20 @@ export class BookingService {
       where: { tenantId, dayOfWeek },
     });
 
-    // 4. Fetch Active Bookings on target day
-    const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
-
+    // 4. Fetch Active Bookings on target day (excluding pending/unpaid bookings older than 10 mins)
+    const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000);
     const bookings = await this.prisma.booking.findMany({
       where: {
         tenantId,
         branchId,
         startTime: { gte: startOfDay, lte: endOfDay },
-        status: { in: [BookingStatus.PENDING, BookingStatus.CONFIRMED] },
+        OR: [
+          { status: BookingStatus.CONFIRMED },
+          { 
+            status: BookingStatus.PENDING,
+            createdAt: { gte: tenMinsAgo }
+          }
+        ],
         ...(staffId ? { staffId } : {}),
       },
       select: { startTime: true, endTime: true },
@@ -72,6 +92,7 @@ export class BookingService {
     }
 
     const slots: string[] = [];
+    const bookedSlots: string[] = [];
     let currentMin = openH * 60 + openM;
     const endMin = closeH * 60 + closeM;
 
@@ -102,16 +123,22 @@ export class BookingService {
       // Check if slot overlaps with active bookings
       let isBooked = false;
       for (const b of bookings) {
-        const bStartMin = b.startTime.getHours() * 60 + b.startTime.getMinutes();
-        const bEndMin = b.endTime.getHours() * 60 + b.endTime.getMinutes();
+        const istStart = this.getISTDate(b.startTime);
+        const istEnd = this.getISTDate(b.endTime);
+        const bStartMin = istStart.getUTCHours() * 60 + istStart.getUTCMinutes();
+        const bEndMin = istEnd.getUTCHours() * 60 + istEnd.getUTCMinutes();
         if (currentMin >= bStartMin && currentMin < bEndMin) {
           isBooked = true;
           break;
         }
       }
 
-      if (!isBreak && !isBooked) {
-        slots.push(`${slotStartStr} - ${slotEndStr}`);
+      if (!isBreak) {
+        const slotText = `${slotStartStr} - ${slotEndStr}`;
+        slots.push(slotText);
+        if (isBooked) {
+          bookedSlots.push(slotText);
+        }
       }
 
       currentMin += 30; // 30 mins step
@@ -120,11 +147,12 @@ export class BookingService {
     return {
       isOpen: true,
       slots,
+      bookedSlots,
     };
   }
 
   // Create booking (limited by subscription plan)
-  async createBooking(tenantId: string, customerId: string, data: any) {
+  async createBooking(tenantId: string, customerId: string, userRole: string, data: any) {
     const isAllowed = await this.subService.checkLimit(tenantId, 'booking');
     if (!isAllowed) {
       throw new BadRequestException('Booking limit reached for current subscription plan. Upgrade to receive more appointments.');
@@ -137,8 +165,24 @@ export class BookingService {
       throw new NotFoundException('Requested service not found');
     }
 
-    const startTime = new Date(data.startTime);
+    const startTime = new Date(data.startTime.includes('+') || data.startTime.endsWith('Z') ? data.startTime : `${data.startTime}+05:30`);
     const endTime = new Date(startTime.getTime() + service.duration * 60 * 1000);
+
+    // Validate slot availability to prevent double booking
+    const availability = await this.getAvailability(tenantId, data.branchId, data.startTime, data.staffId);
+    if (!availability.isOpen) {
+      throw new BadRequestException('Salon is closed on this date');
+    }
+    const istStart = this.getISTDate(startTime);
+    const istEnd = this.getISTDate(endTime);
+    const startH = istStart.getUTCHours().toString().padStart(2, '0');
+    const startM = istStart.getUTCMinutes().toString().padStart(2, '0');
+    const endH = istEnd.getUTCHours().toString().padStart(2, '0');
+    const endM = istEnd.getUTCMinutes().toString().padStart(2, '0');
+    const targetSlotStr = `${startH}:${startM} - ${endH}:${endM}`;
+    if (availability.bookedSlots?.includes(targetSlotStr)) {
+      throw new BadRequestException('This slot is already booked');
+    }
 
     let finalPrice = Number(service.price);
     let appliedCouponId: string | null = null;
@@ -160,6 +204,8 @@ export class BookingService {
       }
     }
 
+    const initialStatus = userRole === 'CUSTOMER' ? BookingStatus.PENDING : BookingStatus.CONFIRMED;
+
     const booking = await this.prisma.$transaction(async (tx) => {
       const created = await tx.booking.create({
         data: {
@@ -169,7 +215,7 @@ export class BookingService {
           staffId: data.staffId || null,
           startTime,
           endTime,
-          status: BookingStatus.PENDING,
+          status: initialStatus,
           totalPrice: finalPrice,
         },
       });
@@ -303,7 +349,37 @@ export class BookingService {
   // List bookings scoped to the requesting user: customers see their own
   // bookings, salon owner/staff see their tenant's bookings.
   async listBookings(user: RequestingUser, status?: BookingStatus) {
-    const where: Record<string, unknown> = status ? { status } : {};
+    const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000);
+    
+    let statusFilter: any;
+    
+    if (user.role === UserRole.CUSTOMER) {
+      // Customers can see pending bookings if they are within the 10-minute hold window.
+      statusFilter = status 
+        ? (status === BookingStatus.PENDING 
+            ? { status: BookingStatus.PENDING, createdAt: { gte: tenMinsAgo } }
+            : { status })
+        : {
+            NOT: {
+              status: BookingStatus.PENDING,
+              createdAt: { lt: tenMinsAgo }
+            }
+          };
+    } else {
+      // Salon owners/staff never see PENDING (unpaid/in-checkout) bookings.
+      // They only see CONFIRMED (paid/walk-in), COMPLETED, CANCELLED, etc.
+      statusFilter = status
+        ? (status === BookingStatus.PENDING 
+            ? { status: { in: [] } } // Return nothing for PENDING
+            : { status })
+        : {
+            status: { not: BookingStatus.PENDING }
+          };
+    }
+
+    const where: any = {
+      ...statusFilter,
+    };
 
     if (user.role === UserRole.CUSTOMER) {
       where.customerId = user.id;

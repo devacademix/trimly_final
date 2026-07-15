@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../core/providers/onboarding_provider.dart';
 
 class SalonLoginScreen extends ConsumerStatefulWidget {
   const SalonLoginScreen({super.key});
@@ -12,19 +13,37 @@ class SalonLoginScreen extends ConsumerStatefulWidget {
 
 class _SalonLoginScreenState extends ConsumerState<SalonLoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: 'owner@trimly.test');
-  final _passwordController = TextEditingController(text: 'ChangeMe!2026');
-  bool _obscurePassword = true;
+  final _phoneController = TextEditingController(text: '+91');
+  final _otpController = TextEditingController();
+  bool _otpSent = false;
   bool _isLoading = false;
 
-  Future<void> _handleLogin() async {
+  Future<void> _handleSendOtp() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
 
-    final success = await ref.read(authControllerProvider.notifier).login(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
+    final phone = _phoneController.text.trim();
+    final ok = await ref.read(onboardingControllerProvider.notifier).sendOtp(phone);
+    
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (ok) {
+      setState(() => _otpSent = true);
+    } else {
+      final message = ref.read(onboardingControllerProvider).errorMessage ?? 'Failed to send OTP';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  Future<void> _handleVerifyOtp() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+
+    final success = await ref.read(authControllerProvider.notifier).loginWithOtp(
+          phone: _phoneController.text.trim(),
+          otp: _otpController.text.trim(),
+          role: 'SALON_OWNER',
         );
 
     if (!mounted) return;
@@ -35,13 +54,13 @@ class _SalonLoginScreenState extends ConsumerState<SalonLoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
     // On success, the router's redirect (driven by authControllerProvider)
-    // takes over and navigates to /dashboard.
+    // takes over and navigates to /dashboard or /onboarding.
   }
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _phoneController.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
@@ -110,15 +129,16 @@ class _SalonLoginScreenState extends ConsumerState<SalonLoginScreen> {
                 ),
                 const SizedBox(height: 48),
 
-                // Email Input
+                // Phone Input
                 TextFormField(
-                  controller: _emailController,
+                  controller: _phoneController,
                   style: const TextStyle(color: Colors.white),
-                  keyboardType: TextInputType.emailAddress,
+                  keyboardType: TextInputType.phone,
+                  readOnly: _otpSent, // Lock phone number once OTP is sent
                   decoration: InputDecoration(
-                    labelText: 'Business Email',
+                    labelText: 'Mobile Number',
                     labelStyle: TextStyle(color: Colors.blueGrey[400]),
-                    prefixIcon: Icon(Icons.email_outlined, color: Colors.blueGrey[400]),
+                    prefixIcon: Icon(Icons.phone_outlined, color: Colors.blueGrey[400]),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(color: Colors.blueGrey[700]!),
@@ -132,60 +152,49 @@ class _SalonLoginScreenState extends ConsumerState<SalonLoginScreen> {
                     ),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty || !value.contains('@')) {
-                      return 'Please enter a valid email address';
+                    if (value == null || value.isEmpty || value.length < 8) {
+                      return 'Please enter a valid mobile number';
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
 
-                // Password Input
-                TextFormField(
-                  controller: _passwordController,
-                  style: const TextStyle(color: Colors.white),
-                  obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    labelStyle: TextStyle(color: Colors.blueGrey[400]),
-                    prefixIcon: Icon(Icons.lock_outline, color: Colors.blueGrey[400]),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
-                        color: Colors.blueGrey[400],
+                // OTP Input (only if sent)
+                if (_otpSent) ...[
+                  TextFormField(
+                    controller: _otpController,
+                    style: const TextStyle(color: Colors.white),
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Enter OTP',
+                      labelStyle: TextStyle(color: Colors.blueGrey[400]),
+                      prefixIcon: Icon(Icons.lock_outline, color: Colors.blueGrey[400]),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.blueGrey[700]!),
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF6366F1)),
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.blueGrey[700]!),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFF6366F1)),
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    validator: (value) {
+                      if (value == null || value.length < 4) {
+                        return 'Enter a valid OTP';
+                      }
+                      return null;
+                    },
                   ),
-                  validator: (value) {
-                    if (value == null || value.length < 6) {
-                      return 'Password must be at least 6 characters long';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
+                  const SizedBox(height: 24),
+                ],
 
                 // Submit Button
                 ElevatedButton(
-                  onPressed: _isLoading ? null : _handleLogin,
+                  onPressed: _isLoading ? null : (_otpSent ? _handleVerifyOtp : _handleSendOtp),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6366F1),
                     foregroundColor: Colors.white,
@@ -204,28 +213,46 @@ class _SalonLoginScreenState extends ConsumerState<SalonLoginScreen> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text(
-                          'Business Log In',
-                          style: TextStyle(
+                      : Text(
+                          _otpSent ? 'Verify OTP & Login' : 'Get OTP',
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                 ),
-                const SizedBox(height: 16),
                 
-                // Create Account Button
-                TextButton(
-                  onPressed: () => context.push('/register'),
-                  child: Text(
-                    "Don't have an account? Create one",
-                    style: TextStyle(
-                      color: Colors.blueGrey[300],
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                if (_otpSent) ...[
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _otpSent = false;
+                        _otpController.clear();
+                      });
+                    },
+                    child: Text(
+                      "Change Mobile Number",
+                      style: TextStyle(
+                        color: Colors.blueGrey[300],
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _isLoading ? null : _handleSendOtp,
+                    child: Text(
+                      "Resend OTP",
+                      style: TextStyle(
+                        color: const Color(0xFF6366F1), // Indigo
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

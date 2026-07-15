@@ -31,18 +31,16 @@ export class OnboardingService {
   // Step 2: Mobile Verification — We use existing auth OTP endpoints.
   // Step 3: Basic Info — create user with SALON_OWNER role + tenant
   async basicInfo(dto: {
-    phone: string;
+    userId: string;
     ownerName: string;
     salonName: string;
     email: string;
-    password: string;
     businessCategory: BusinessCategory;
   }) {
-    const phoneNormalized = dto.phone.replace(/[^\d+]/g, '');
     const emailNormalized = dto.email.toLowerCase();
 
-    let user = await this.prisma.user.findUnique({ where: { phoneNormalized } });
-    if (!user) throw new BadRequestException('Phone not verified. Please verify OTP first.');
+    let user = await this.prisma.user.findUnique({ where: { id: dto.userId } });
+    if (!user) throw new BadRequestException('User not found.');
 
     if (user.role !== UserRole.SALON_OWNER) {
       await this.prisma.user.update({
@@ -56,8 +54,6 @@ export class OnboardingService {
       throw new ConflictException('Email already registered');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 12);
-
     // Generate unique slug
     const slugBase = dto.salonName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const slug = await this.generateUniqueSlug(slugBase);
@@ -68,7 +64,7 @@ export class OnboardingService {
         name: dto.salonName,
         businessCategory: dto.businessCategory,
         ownerEmail: emailNormalized,
-        ownerPhone: phoneNormalized,
+        ownerPhone: user.phone || user.phoneNormalized || '',
         onboardingStep: OnboardingStep.BASIC_INFO,
       },
     });
@@ -77,7 +73,6 @@ export class OnboardingService {
       where: { id: user.id },
       data: {
         email: emailNormalized,
-        passwordHash,
         fullName: dto.ownerName,
         tenantId: tenant.id,
         status: UserStatus.ACTIVE,
@@ -412,6 +407,13 @@ export class OnboardingService {
   async complete(tenantId: string) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const activeSub = await this.prisma.salonSubscription.findFirst({
+      where: { tenantId, status: 'ACTIVE' },
+    });
+    if (!activeSub) {
+      throw new BadRequestException('An active subscription is required to complete onboarding.');
+    }
 
     await this.prisma.tenant.update({
       where: { id: tenantId },

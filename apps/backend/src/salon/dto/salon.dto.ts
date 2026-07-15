@@ -63,6 +63,10 @@ export class UpdateSalonProfileDto {
 
   @IsOptional()
   @IsString()
+  businessRegNumber?: string;
+
+  @IsOptional()
+  @IsString()
   websiteUrl?: string;
 
   @IsOptional()

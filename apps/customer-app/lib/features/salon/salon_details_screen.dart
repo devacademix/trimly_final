@@ -131,16 +131,18 @@ class _SalonDetailsScreenState extends ConsumerState<SalonDetailsScreen> {
         ),
         data: (detail) => _buildContent(context, theme, detail),
       ),
-      floatingActionButton: detailAsync.maybeWhen(
-        data: (detail) => detail.ownerId == null
-            ? null
-            : FloatingActionButton.extended(
-                onPressed: _isStartingChat ? null : () => _messageSalon(detail),
-                icon: const Icon(Icons.chat_bubble_outline),
-                label: Text(_isStartingChat ? 'Opening…' : 'Message'),
-              ),
-        orElse: () => null,
-      ),
+      floatingActionButton: _selectedService != null
+          ? null
+          : detailAsync.maybeWhen(
+              data: (detail) => detail.ownerId == null
+                  ? null
+                  : FloatingActionButton.extended(
+                      onPressed: _isStartingChat ? null : () => _messageSalon(detail),
+                      icon: const Icon(Icons.chat_bubble_outline),
+                      label: Text(_isStartingChat ? 'Opening…' : 'Message'),
+                    ),
+              orElse: () => null,
+            ),
       bottomSheet: _selectedService == null
           ? null
           : _buildCheckoutBar(theme, _selectedService!),
@@ -437,28 +439,46 @@ class _SalonDetailsScreenState extends ConsumerState<SalonDetailsScreen> {
                     Text('₹${service.price.toStringAsFixed(0)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   ],
                 ),
-                ElevatedButton(
-                  onPressed: detail == null || detail.branches.isEmpty
-                      ? null
-                      : () {
-                          context.push(
-                            '/booking',
-                            extra: BookingDraft(
-                              tenantId: detail.summary.id,
-                              branchId: detail.branches.first.id,
-                              salonName: detail.summary.name,
-                              service: service,
-                              staff: _selectedStaff,
-                            ),
-                          );
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Book Slot', style: TextStyle(fontWeight: FontWeight.bold)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (detail != null && detail.ownerId != null) ...[
+                      IconButton.outlined(
+                        onPressed: _isStartingChat ? null : () => _messageSalon(detail),
+                        icon: _isStartingChat
+                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.chat_bubble_outline),
+                        style: IconButton.styleFrom(
+                          padding: const EdgeInsets.all(16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    ElevatedButton(
+                      onPressed: detail == null || detail.branches.isEmpty
+                          ? null
+                          : () {
+                              context.push(
+                                '/booking',
+                                extra: BookingDraft(
+                                  tenantId: detail.summary.id,
+                                  branchId: detail.branches.first.id,
+                                  salonName: detail.summary.name,
+                                  service: service,
+                                  staff: _selectedStaff,
+                                ),
+                              );
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('Book Slot', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
                 ),
               ],
             ),

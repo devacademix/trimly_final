@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../providers/onboarding_provider.dart' show onboardingControllerProvider, OnboardingStep;
 import '../../features/auth/salon_login_screen.dart';
-import '../../features/auth/salon_register_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/bookings/bookings_list_screen.dart';
 import '../../features/navigation/salon_navigation.dart';
@@ -47,18 +46,16 @@ final salonRouterProvider = Provider<GoRouter>((ref) {
         return path == '/' ? null : '/';
       }
       if (authState.status == AuthStatus.unauthenticated) {
-        if (path == '/register') return null;
         return path == '/login' ? null : '/login';
       }
       // authenticated — check onboarding status
       final onboardingState = ref.read(onboardingControllerProvider);
-      if (onboardingState.currentStep != OnboardingStep.completed) {
+      if (onboardingState.currentStep != OnboardingStep.completed || onboardingState.tenantStatus != 'APPROVED') {
         if (path == '/onboarding') return null;
-        if (path == '/login') return null;
         return '/onboarding';
       }
       
-      if (path == '/login' || path == '/register' || path == '/onboarding' || path == '/') return '/dashboard';
+      if (path == '/login' || path == '/onboarding' || path == '/') return '/dashboard';
       return null;
     },
     routes: [
@@ -69,10 +66,6 @@ final salonRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/login',
         builder: (context, state) => const SalonLoginScreen(),
-      ),
-      GoRoute(
-        path: '/register',
-        builder: (context, state) => const SalonRegisterScreen(),
       ),
       GoRoute(
         path: '/onboarding',

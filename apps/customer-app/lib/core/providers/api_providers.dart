@@ -33,7 +33,10 @@ final bookingRepositoryProvider = Provider<BookingRepository>((ref) {
 });
 
 final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) {
-  return PushNotificationService(apiClient: ref.watch(apiClientProvider));
+  return PushNotificationService(
+    apiClient: ref.watch(apiClientProvider),
+    ref: ref,
+  );
 });
 
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {

@@ -64,25 +64,9 @@ class AuthController extends Notifier<AuthState> {
   }
 
   /// Returns true on success. On failure, [state.errorMessage] is set.
-  Future<bool> register({required String email, required String password, required String fullName}) async {
+  Future<bool> loginWithOtp({required String phone, required String otp, required String role}) async {
     try {
-      await ref.read(authRepositoryProvider).register(
-            email: email,
-            password: password,
-            fullName: fullName,
-          );
-      return await login(email: email, password: password);
-    } on ApiException catch (e) {
-      state = AuthState(status: AuthStatus.unauthenticated, errorMessage: e.message);
-      return false;
-    }
-  }
-
-  /// Returns true on success. On failure, [state.errorMessage] is set for
-  /// the login screen to display.
-  Future<bool> login({required String email, required String password}) async {
-    try {
-      final user = await ref.read(authRepositoryProvider).login(email: email, password: password);
+      final user = await ref.read(authRepositoryProvider).loginWithOtp(phone: phone, otp: otp, role: role);
 
       if (!_allowedRoles.contains(user.role)) {
         await ref.read(authRepositoryProvider).logout();

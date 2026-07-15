@@ -15,7 +15,8 @@ export class PlansController {
   @Get()
   @ApiOperation({ summary: 'Get all active subscription plans' })
   async getActivePlans() {
-    return this.plansService.findAllActive();
+    const plans = await this.plansService.findAllActive();
+    return { success: true, data: plans };
   }
 
   @Get('all')
@@ -24,7 +25,8 @@ export class PlansController {
   @Roles(UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get all plans including inactive (Super Admin only)' })
   async getAllPlans() {
-    return this.plansService.findAll();
+    const plans = await this.plansService.findAll();
+    return { success: true, data: plans };
   }
 
   @Post()
@@ -33,7 +35,8 @@ export class PlansController {
   @Roles(UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Create a new subscription plan (Super Admin only)' })
   async createPlan(@Body() data: CreatePlanDto) {
-    return this.plansService.create(data);
+    const plan = await this.plansService.create(data);
+    return { success: true, data: plan };
   }
 
   @Patch(':id')
@@ -42,7 +45,8 @@ export class PlansController {
   @Roles(UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Update an existing subscription plan (Super Admin only)' })
   async updatePlan(@Param('id') id: string, @Body() data: UpdatePlanDto) {
-    return this.plansService.update(id, data);
+    const plan = await this.plansService.update(id, data);
+    return { success: true, data: plan };
   }
 }
 

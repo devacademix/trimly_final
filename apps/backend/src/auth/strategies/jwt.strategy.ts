@@ -28,6 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         tenantId: true,
         profileImageUrl: true,
         referralCode: true,
+        onboardingComplete: true,
       },
     });
 

@@ -93,7 +93,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       await ref.read(onboardingControllerProvider.notifier).fetchPlans();
     } catch (_) {}
 
-    final initialStep = ref.read(onboardingControllerProvider).currentStep;
+    var initialStep = ref.read(onboardingControllerProvider).currentStep;
+    if (initialStep == OnboardingStep.welcome || initialStep == OnboardingStep.mobileVerification) {
+      initialStep = OnboardingStep.basicInfo;
+    }
     final initialIndex = OnboardingStep.values.indexOf(initialStep);
     _pageController = PageController(initialPage: initialIndex);
 
@@ -248,7 +251,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
     ref.listen(onboardingControllerProvider, (previous, next) {
       if (previous?.currentStep != next.currentStep) {
-        final targetIndex = OnboardingStep.values.indexOf(next.currentStep);
+        var targetStep = next.currentStep;
+        if (targetStep == OnboardingStep.welcome || targetStep == OnboardingStep.mobileVerification) {
+          targetStep = OnboardingStep.basicInfo;
+        }
+        final targetIndex = OnboardingStep.values.indexOf(targetStep);
         if (_pageController.hasClients && _pageController.page?.round() != targetIndex) {
           _pageController.animateToPage(
             targetIndex,
@@ -294,8 +301,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 controller: _pageController,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
-                  _buildWelcomeStep(),
-                  _buildMobileStep(),
+                  const SizedBox(), // Placeholder for welcome (skipped)
+                  const SizedBox(), // Placeholder for mobile (skipped)
                   _buildBasicInfoStep(),
                   _buildLocationStep(),
                   _buildDetailsStep(),
@@ -412,123 +419,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  // ═══════════════════ WELCOME STEP ═══════════════════
-  Widget _buildWelcomeStep() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 90, height: 90,
-            decoration: BoxDecoration(color: _accent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
-            child: const Icon(Icons.store, color: _accent, size: 44),
-          ),
-          const SizedBox(height: 24),
-          const Text('Welcome to Trimly', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
-          const SizedBox(height: 8),
-          const Text('Manage your salon, grow your business', style: TextStyle(color: Colors.blueGrey, fontSize: 15)),
-          const SizedBox(height: 40),
-          SizedBox(
-            width: double.infinity, height: 50,
-            child: ElevatedButton.icon(
-              onPressed: _goNext,
-              icon: const Icon(Icons.storefront),
-              label: const Text('Register Business', style: TextStyle(fontSize: 16)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _accent, foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity, height: 50,
-            child: OutlinedButton.icon(
-              onPressed: () => context.go('/login'),
-              icon: const Icon(Icons.login),
-              label: const Text('Login', style: TextStyle(fontSize: 16)),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: _border),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity, height: 50,
-            child: OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.g_mobiledata),
-              label: const Text('Continue with Google', style: TextStyle(fontSize: 16)),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: _border),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text('By continuing, you agree to our Terms & Privacy Policy',
-              style: TextStyle(color: Colors.blueGrey.shade600, fontSize: 11, height: 1.4)),
-        ],
-      ),
-    );
-  }
-
   // ═══════════════════ MOBILE OTP STEP ═══════════════════
-  Widget _buildMobileStep() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Form(
-        key: _formKeys[1],
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _sectionTitle('Mobile Verification'),
-          _subtitle('Enter your phone number to verify your account'),
-          _errorBanner(),
-          _inputField(
-            controller: _phoneCtrl,
-            label: 'Mobile Number',
-            hint: '+91 98765 43210',
-            keyboardType: TextInputType.phone,
-            prefixIcon: const Icon(Icons.phone, color: Colors.blueGrey),
-          ),
-          if (_otpSent) ...[
-            _inputField(
-              controller: _otpCtrl,
-              label: 'Enter OTP',
-              hint: '6-digit code',
-              keyboardType: TextInputType.number,
-              prefixIcon: const Icon(Icons.lock_outline, color: Colors.blueGrey),
-              validator: (v) => (v == null || v.length < 4) ? 'Enter valid OTP' : null,
-            ),
-          ],
-          const SizedBox(height: 8),
-          if (!_otpSent)
-            _actionButton('Send OTP', onPressed: () async {
-              if (_formKeys[1].currentState!.validate()) {
-                final phone = _phoneCtrl.text.trim();
-                final ok = await ref.read(onboardingControllerProvider.notifier).sendOtp(phone);
-                if (ok && mounted) setState(() => _otpSent = true);
-              }
-            }),
-          if (_otpSent) ...[
-            _actionButton('Verify OTP', onPressed: () async {
-              if (_formKeys[1].currentState!.validate()) {
-                final phone = _phoneCtrl.text.trim();
-                final otp = _otpCtrl.text.trim();
-                final ok = await ref.read(onboardingControllerProvider.notifier).verifyOtp(phone, otp);
-                if (ok && mounted) _goNext();
-              }
-            }),
-            const SizedBox(height: 8),
-            _skipButton(),
-          ],
-        ]),
-      ),
-    );
-  }
+  // (Removed, OTP is now handled at login)
 
   // ═══════════════════ BASIC INFO STEP ═══════════════════
   Widget _buildBasicInfoStep() {
@@ -545,8 +437,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           _inputField(controller: _salonNameCtrl, label: 'Salon Name', prefixIcon: const Icon(Icons.store, color: Colors.blueGrey)),
           _inputField(controller: _emailCtrl, label: 'Email', keyboardType: TextInputType.emailAddress, prefixIcon: const Icon(Icons.email, color: Colors.blueGrey),
               validator: (v) => (v == null || !v.contains('@')) ? 'Valid email required' : null),
-          _inputField(controller: _passwordCtrl, label: 'Password', obscure: true, prefixIcon: const Icon(Icons.lock, color: Colors.blueGrey),
-              validator: (v) => (v == null || v.length < 8) ? 'Min 8 characters' : null),
           Padding(
             padding: const EdgeInsets.only(bottom: 14),
             child:             DropdownButtonFormField<String>(
@@ -572,7 +462,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ownerName: _ownerNameCtrl.text.trim(),
                 salonName: _salonNameCtrl.text.trim(),
                 email: _emailCtrl.text.trim(),
-                password: _passwordCtrl.text,
                 businessCategory: _businessCategory,
               );
             }
@@ -1027,9 +916,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
           )),
           const SizedBox(height: 16),
-          _actionButton('Continue', onPressed: () async {
-            final ok = await ref.read(onboardingControllerProvider.notifier).completeOnboarding();
-          }, loading: ref.watch(onboardingControllerProvider).isLoading),
+          _actionButton('Continue', onPressed: () {
+            _goNext();
+          }),
         ]),
       ),
     );
@@ -1064,7 +953,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           else
           ...plans.map((plan) {
             final name = plan['name'] as String;
-            final price = (plan['price'] as num).toDouble();
+            final price = double.parse(plan['price'].toString());
             final selected = _selectedPlanId == plan['id'];
             return GestureDetector(
               onTap: () => setState(() => _selectedPlanId = plan['id'] as String?),
@@ -1138,7 +1027,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ]),
         )),
         const Spacer(),
-        _actionButton('Finish Tour', onPressed: _goNext),
+        _actionButton('Finish Tour', onPressed: () async {
+          await ref.read(onboardingControllerProvider.notifier).completeOnboarding();
+        }, loading: ref.watch(onboardingControllerProvider).isLoading),
         const SizedBox(height: 16),
       ]),
     );

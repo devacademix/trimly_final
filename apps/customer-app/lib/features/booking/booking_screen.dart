@@ -21,6 +21,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
   bool _isLoadingSlots = false;
   String _selectedPaymentMethod = 'Razorpay';
   List<String> _slots = [];
+  List<String> _bookedSlots = [];
   String? _slotsError;
 
   final _couponCtrl = TextEditingController();
@@ -51,6 +52,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
       if (!mounted) return;
       setState(() {
         _slots = result.isOpen ? result.slots : [];
+        _bookedSlots = result.isOpen ? result.bookedSlots : [];
         _slotsError = result.isOpen ? null : (result.reason ?? 'Closed on this date');
       });
     } catch (e) {
@@ -323,20 +325,30 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                 runSpacing: 10,
                 children: _slots.map((slot) {
                   final isSelected = _selectedTime == slot;
+                  final isBooked = _bookedSlots.contains(slot);
                   return GestureDetector(
-                    onTap: () => setState(() => _selectedTime = slot),
+                    onTap: isBooked ? null : () => setState(() => _selectedTime = slot),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.08) : theme.colorScheme.surface,
+                        color: isBooked
+                            ? Colors.grey.shade200
+                            : (isSelected ? theme.colorScheme.primary.withValues(alpha: 0.08) : theme.colorScheme.surface),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: isSelected ? theme.colorScheme.primary : Colors.grey.shade300),
+                        border: Border.all(
+                          color: isBooked
+                              ? Colors.grey.shade300
+                              : (isSelected ? theme.colorScheme.primary : Colors.grey.shade300),
+                        ),
                       ),
                       child: Text(
                         slot,
                         style: TextStyle(
+                          decoration: isBooked ? TextDecoration.lineThrough : null,
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          color: isSelected ? theme.colorScheme.primary : Colors.black87,
+                          color: isBooked
+                              ? Colors.grey
+                              : (isSelected ? theme.colorScheme.primary : Colors.black87),
                         ),
                       ),
                     ),
@@ -392,8 +404,6 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
             Column(
               children: [
                 _buildPaymentMethodTile('Razorpay', 'Pay securely via Cards, Netbanking, or UPI', Icons.payment, theme),
-                const SizedBox(height: 8),
-                _buildPaymentMethodTile('Wallet', 'Use Trimly Wallet balance', Icons.wallet, theme),
               ],
             ),
             const SizedBox(height: 140),

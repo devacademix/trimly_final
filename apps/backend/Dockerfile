@@ -59,7 +59,7 @@ COPY --from=builder /app/packages/types/dist ./packages/types/dist
 COPY --from=builder /app/apps/backend/package.json ./apps/backend/package.json
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
 
-RUN mkdir -p /app/uploads/temp && chown -R trimly:trimly /app/uploads
+RUN mkdir -p /app/upload/temp && chown -R trimly:trimly /app/upload
 
 USER trimly
 EXPOSE 4000

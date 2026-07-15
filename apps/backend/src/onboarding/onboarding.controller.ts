@@ -33,7 +33,7 @@ export class OnboardingController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Step 3: Save basic salon & owner info, create tenant' })
   async basicInfo(@CurrentUser() user: any, @Body() dto: BasicInfoDto): Promise<any> {
-    return await this.onboardingService.basicInfo({ phone: user.phone, ...dto });
+    return await this.onboardingService.basicInfo({ userId: user.id, ...dto });
   }
 
   @Put('location')
@@ -121,7 +121,8 @@ export class OnboardingController {
   @Get('plans')
   @ApiOperation({ summary: 'Step 12: List subscription plans' })
   async getPlans(): Promise<any> {
-    return await this.onboardingService.getPlans();
+    const plans = await this.onboardingService.getPlans();
+    return { success: true, data: plans };
   }
 
   @Post('subscribe')

@@ -10,30 +10,12 @@ class AuthRepository {
 
   AuthRepository({required this.apiClient, required this.secureStorage});
 
-  Future<AuthUser> register({
-    required String email,
-    required String password,
-    required String fullName,
-  }) async {
+  Future<AuthUser> loginWithOtp({required String phone, required String otp, required String role}) async {
     try {
-      final response = await apiClient.dio.post('/auth/register', data: {
-        'email': email,
-        'password': password,
-        'fullName': fullName,
-        'role': 'SALON_OWNER',
-      });
-      final data = response.data['data'] as Map<String, dynamic>;
-      return AuthUser.fromJson(data);
-    } on DioException catch (e) {
-      throw ApiException.fromDioException(e);
-    }
-  }
-
-  Future<AuthUser> login({required String email, required String password}) async {
-    try {
-      final response = await apiClient.dio.post('/auth/login', data: {
-        'email': email,
-        'password': password,
+      final response = await apiClient.dio.post('/auth/otp/verify', data: {
+        'phone': phone,
+        'otp': otp,
+        'role': role,
       });
       final data = response.data['data'] as Map<String, dynamic>;
       final user = AuthUser.fromJson(data['user'] as Map<String, dynamic>);
@@ -42,7 +24,9 @@ class AuthRepository {
         accessToken: data['accessToken'] as String,
         refreshToken: data['refreshToken'] as String,
       );
-      await secureStorage.saveTenantId(user.tenantId);
+      if (user.tenantId != null) {
+        await secureStorage.saveTenantId(user.tenantId!);
+      }
 
       return user;
     } on DioException catch (e) {

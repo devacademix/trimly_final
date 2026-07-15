@@ -93,7 +93,7 @@ class SalonService {
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String?,
-      price: (json['price'] as num).toDouble(),
+      price: double.parse(json['price'].toString()),
       duration: json['duration'] as int,
       imageUrl: json['imageUrl'] as String?,
       categoryName: categoryName,

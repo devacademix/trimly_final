@@ -26,10 +26,10 @@ import { UserStatus } from '@trimly/types';
       const allowed = (process.env.CORS_ORIGINS || 'http://localhost:3000')
         .split(',')
         .map((o) => o.trim());
-      if (!origin || allowed.includes(origin)) {
+      if (!origin || origin === 'null' || origin === 'file://' || allowed.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        callback(new Error(`Not allowed by CORS: ${origin}`));
       }
     },
     credentials: true,
@@ -49,6 +49,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // Client is expected to connect with `io(url, { auth: { token } })`.
   async handleConnection(client: Socket) {
     try {
+      console.info(`[CHAT GATEWAY] Client connecting: ${client.id}`);
       const authToken = client.handshake.auth?.token as string | undefined;
       const headerToken = client.handshake.headers.authorization?.toString().replace(/^Bearer\s+/i, '');
       const token = authToken || headerToken;
@@ -67,8 +68,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       client.data.userId = user.id;
-    } catch {
-      console.warn(`[CHAT GATEWAY] Rejected unauthenticated connection: ${client.id}`);
+      console.info(`[CHAT GATEWAY] Authenticated client: ${client.id} for user ${user.id}`);
+    } catch (err) {
+      console.warn(`[CHAT GATEWAY] Rejected unauthenticated connection: ${client.id} | Error: ${(err as Error).message}`);
       client.disconnect(true);
     }
   }

@@ -20,8 +20,8 @@ class CouponValidation {
       isValid: json['isValid'] as bool? ?? false,
       code: json['code'] as String?,
       discountType: json['discountType'] as String?,
-      discountAmount: (json['discountAmount'] as num?)?.toDouble() ?? 0.0,
-      finalAmount: (json['finalAmount'] as num?)?.toDouble() ?? 0.0,
+      discountAmount: json['discountAmount'] != null ? double.parse(json['discountAmount'].toString()) : 0.0,
+      finalAmount: json['finalAmount'] != null ? double.parse(json['finalAmount'].toString()) : 0.0,
       message: json['message'] as String?,
     );
   }

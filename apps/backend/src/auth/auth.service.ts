@@ -78,6 +78,7 @@ export class AuthService {
       tenantId: user.tenantId,
       profileImageUrl: user.profileImageUrl,
       referralCode: user.referralCode,
+      onboardingComplete: user.onboardingComplete,
     };
   }
 
@@ -169,7 +170,7 @@ export class AuthService {
     };
   }
 
-  async verifyOtp(phone: string, otp: string): Promise<AuthSession> {
+  async verifyOtp(phone: string, otp: string, requestedRole?: UserRole): Promise<AuthSession> {
     const phoneNormalized = phone.replace(/[^\d+]/g, '');
     const record = await this.prisma.otpSecret.findUnique({
       where: { phoneNormalized },
@@ -205,12 +206,14 @@ export class AuthService {
     });
 
     if (!user) {
+      const allowedRoles = [UserRole.CUSTOMER, UserRole.SALON_OWNER];
+      const role = requestedRole && allowedRoles.includes(requestedRole) ? requestedRole : UserRole.CUSTOMER;
       const referralCode = await this.generateUniqueReferralCode();
       user = await this.prisma.user.create({
         data: {
           phone: phoneNormalized,
           phoneNormalized,
-          role: UserRole.CUSTOMER, // Defaults to CUSTOMER
+          role,
           status: UserStatus.ACTIVE,
           authProvider: AuthProvider.OTP,
           referralCode,
@@ -357,6 +360,7 @@ export class AuthService {
         tenantId: user.tenantId,
         profileImageUrl: user.profileImageUrl,
         referralCode: user.referralCode,
+        onboardingComplete: user.onboardingComplete,
       },
     };
   }

@@ -55,9 +55,10 @@ export class AuthController {
   @Post('otp/verify')
   @Throttle(BRUTE_FORCE_THROTTLE)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Verify OTP code and authenticate user' })
+  @ApiOperation({ summary: 'Verify OTP code' })
+  @ApiSwaggerResponse({ status: 200, description: 'OTP verified successfully' })
   async verifyOtp(@Body() dto: VerifyOtpDto): Promise<ApiResponse<AuthSession>> {
-    const session = await this.authService.verifyOtp(dto.phone, dto.otp);
+    const session = await this.authService.verifyOtp(dto.phone, dto.otp, dto.role);
     return {
       success: true,
       data: session,

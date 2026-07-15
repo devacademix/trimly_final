@@ -155,9 +155,38 @@ class _BookingsScreenState extends ConsumerState<BookingsScreen> with SingleTick
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
-                        child: Text(
-                          booking.tenantName ?? 'Salon',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        child: Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          children: [
+                            Text(
+                              booking.tenantName ?? 'Salon',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: booking.status == BookingStatus.confirmed
+                                    ? Colors.green.withValues(alpha: 0.1)
+                                    : booking.status == BookingStatus.pending
+                                        ? Colors.orange.withValues(alpha: 0.1)
+                                        : Colors.grey.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                booking.status.label,
+                                style: TextStyle(
+                                  color: booking.status == BookingStatus.confirmed
+                                      ? Colors.green
+                                      : booking.status == BookingStatus.pending
+                                          ? Colors.orange
+                                          : Colors.grey,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       Text(

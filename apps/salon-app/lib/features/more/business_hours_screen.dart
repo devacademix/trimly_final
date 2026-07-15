@@ -170,7 +170,7 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
                   child: Row(
                     children: [
                       SizedBox(
-                        width: 100,
+                        width: 85,
                         child: Text(
                           _days[i],
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
@@ -181,7 +181,7 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
                         GestureDetector(
                           onTap: () => _pickTime(i, true),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                             decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: _border)),
                             child: Text(
                               _formatTime12h(schedule['openTime']),
@@ -190,13 +190,13 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
                           ),
                         ),
                         const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          padding: EdgeInsets.symmetric(horizontal: 4),
                           child: Text('-', style: TextStyle(color: Colors.blueGrey)),
                         ),
                         GestureDetector(
                           onTap: () => _pickTime(i, false),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                             decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: _border)),
                             child: Text(
                               _formatTime12h(schedule['closeTime']),
@@ -206,7 +206,7 @@ class _BusinessHoursScreenState extends ConsumerState<BusinessHoursScreen> {
                         ),
                       ] else
                         const Text('Closed Today', style: TextStyle(color: Colors.blueGrey, fontSize: 13, fontStyle: FontStyle.italic)),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 8),
                       Switch(
                         value: isOpen,
                         activeColor: _accent,

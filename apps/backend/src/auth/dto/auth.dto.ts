@@ -44,6 +44,10 @@ export class VerifyOtpDto {
   @IsString()
   @Matches(OTP_RE, { message: 'otp must be a 4-8 digit code' })
   otp!: string;
+
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
 }
 
 export class RefreshTokenDto {
