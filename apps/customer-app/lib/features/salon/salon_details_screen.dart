@@ -157,6 +157,25 @@ class _SalonDetailsScreenState extends ConsumerState<SalonDetailsScreen> {
         SliverAppBar(
           expandedHeight: 250,
           pinned: true,
+          actions: [
+            Container(
+              margin: const EdgeInsets.only(right: 8),
+              decoration: const BoxDecoration(
+                color: Colors.black26,
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: Icon(
+                  ref.watch(favoritesProvider).any((s) => s.id == salon.id)
+                      ? Icons.favorite
+                      : Icons.favorite_border,
+                  color: Colors.redAccent,
+                  size: 26,
+                ),
+                onPressed: () => ref.read(favoritesProvider.notifier).toggle(salon),
+              ),
+            ),
+          ],
           flexibleSpace: FlexibleSpaceBar(
             title: Text(
               salon.name,

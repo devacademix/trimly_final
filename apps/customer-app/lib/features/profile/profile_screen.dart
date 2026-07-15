@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/data_providers.dart';
 
@@ -14,11 +15,31 @@ class ProfileScreen extends ConsumerStatefulWidget {
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _darkMode = false;
   String _selectedLanguage = 'English';
+  List<String> _savedAddresses = [];
 
-  final List<String> _savedAddresses = [
-    'Home: Flat 402, Prestige Heights, Bangalore',
-    'Work: Signet Ring Road, Tech Park, Bangalore',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadAddresses();
+  }
+
+  Future<void> _loadAddresses() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList('saved_addresses');
+    if (mounted) {
+      setState(() {
+        _savedAddresses = list ?? [
+          'Home: Flat 402, Prestige Heights, Bangalore',
+          'Work: Signet Ring Road, Tech Park, Bangalore',
+        ];
+      });
+    }
+  }
+
+  Future<void> _saveAddresses() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('saved_addresses', _savedAddresses);
+  }
 
   void _showAddAddressDialog() {
     final addressController = TextEditingController();
@@ -43,6 +64,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 setState(() {
                   _savedAddresses.add(addressController.text);
                 });
+                _saveAddresses();
                 Navigator.pop(context);
               }
             },
@@ -230,6 +252,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             setState(() {
                               _savedAddresses.remove(addr);
                             });
+                            _saveAddresses();
                           },
                         ),
                       )),
