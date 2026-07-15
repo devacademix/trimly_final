@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/auth_provider.dart';
 
@@ -210,6 +211,20 @@ class _SalonLoginScreenState extends ConsumerState<SalonLoginScreen> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Create Account Button
+                TextButton(
+                  onPressed: () => context.push('/register'),
+                  child: Text(
+                    "Don't have an account? Create one",
+                    style: TextStyle(
+                      color: Colors.blueGrey[300],
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
               ],
             ),

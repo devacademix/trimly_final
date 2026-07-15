@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/models/user_role.dart';
 import '../../core/providers/auth_provider.dart';
 
@@ -198,7 +199,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   children: [
                     const Text("Don't have an account?"),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: () => context.go('/signup'),
                       child: const Text('Sign Up'),
                     ),
                   ],

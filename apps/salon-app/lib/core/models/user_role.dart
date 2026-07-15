@@ -2,6 +2,8 @@
 enum UserRole {
   superAdmin('SUPER_ADMIN'),
   salonOwner('SALON_OWNER'),
+  manager('MANAGER'),
+  receptionist('RECEPTIONIST'),
   staff('STAFF'),
   customer('CUSTOMER');
 

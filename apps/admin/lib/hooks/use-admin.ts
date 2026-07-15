@@ -65,3 +65,87 @@ export function useSetGlobalCommission() {
       }),
   });
 }
+
+export function usePlans() {
+  return useQuery({
+    queryKey: ['admin', 'plans'],
+    queryFn: () => apiClient<any[]>('/api/admin/plans'),
+  });
+}
+
+export function useCreatePlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) =>
+      apiClient<any>('/api/admin/plans', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'plans'] }),
+  });
+}
+
+export function useUpdatePlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      apiClient<any>(`/api/admin/plans/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'plans'] }),
+  });
+}
+
+export function useDeleteSalon() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<any>(`/api/admin/salons/${id}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'salons'] }),
+  });
+}
+
+export function useUpdateUserStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      apiClient<any>(`/api/admin/users/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      }),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+  });
+}
+
+export function useUpdateUserRole() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, role }: { id: string; role: string }) =>
+      apiClient<any>(`/api/admin/users/${id}/role`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+  });
+}
+
+export function useDeleteUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<any>(`/api/admin/users/${id}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+  });
+}
+

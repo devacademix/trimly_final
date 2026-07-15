@@ -12,10 +12,13 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableEmpty } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Trash2 } from 'lucide-react';
 import { SalonStatusBadge } from './status-badge';
 import { SalonStatusDialog } from './salon-status-dialog';
 import { SalonCommissionDialog } from './salon-commission-dialog';
-import { useSalons } from '@/lib/hooks/use-admin';
+import { SalonDetailDialog } from './salon-detail-dialog';
+import { useSalons, useDeleteSalon } from '@/lib/hooks/use-admin';
 import { formatDate } from '@/lib/utils';
 import type { Salon } from '@/types/admin';
 
@@ -24,6 +27,9 @@ export function SalonsTable() {
   const [search, setSearch] = useState('');
   const [statusTarget, setStatusTarget] = useState<Salon | null>(null);
   const [commissionTarget, setCommissionTarget] = useState<Salon | null>(null);
+  const [detailTarget, setDetailTarget] = useState<Salon | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Salon | null>(null);
+  const deleteMutation = useDeleteSalon();
 
   const columns = useMemo<ColumnDef<Salon>[]>(
     () => [
@@ -41,6 +47,20 @@ export function SalonsTable() {
         accessorKey: 'status',
         header: 'Status',
         cell: ({ row }) => <SalonStatusBadge status={row.original.status} />,
+      },
+      {
+        id: 'onboarding',
+        header: 'Onboarding',
+        cell: ({ row }) => {
+          const step = row.original.onboardingStep;
+          const kyc = row.original.kycStatus;
+          return (
+            <div className="text-xs">
+              <div className="text-slate-700 dark:text-slate-300">{step || '—'}</div>
+              {kyc && <div className={`${kyc === 'APPROVED' ? 'text-green-600' : kyc === 'REJECTED' ? 'text-red-600' : 'text-yellow-600'}`}>{kyc}</div>}
+            </div>
+          );
+        },
       },
       {
         accessorKey: 'commissionPct',
@@ -69,11 +89,17 @@ export function SalonsTable() {
         header: '',
         cell: ({ row }) => (
           <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setDetailTarget(row.original)}>
+              Review
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setCommissionTarget(row.original)}>
               Commission
             </Button>
             <Button variant="outline" size="sm" onClick={() => setStatusTarget(row.original)}>
               Status
+            </Button>
+            <Button variant="outline" size="sm" className="text-red-500 hover:text-red-600 border-red-200 hover:bg-red-50" onClick={() => setDeleteTarget(row.original)}>
+              <Trash2 className="size-4" />
             </Button>
           </div>
         ),
@@ -147,6 +173,43 @@ export function SalonsTable() {
           open={!!commissionTarget}
           onOpenChange={(o) => !o && setCommissionTarget(null)}
         />
+      )}
+      {detailTarget && (
+        <SalonDetailDialog
+          salon={detailTarget}
+          open={!!detailTarget}
+          onOpenChange={(o) => !o && setDetailTarget(null)}
+        />
+      )}
+
+      {deleteTarget && (
+        <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-red-600">Hard Delete Salon</DialogTitle>
+              <DialogDescription>
+                Are you absolutely sure you want to delete <strong>{deleteTarget.name}</strong>?
+                This action cannot be undone. It will permanently delete this tenant, all their bookings, users, and data.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteMutation.isPending}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  deleteMutation.mutate(deleteTarget.id, {
+                    onSuccess: () => setDeleteTarget(null),
+                  });
+                }}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? 'Deleting...' : 'Yes, delete everything'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

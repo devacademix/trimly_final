@@ -23,6 +23,12 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
   List<String> _slots = [];
   String? _slotsError;
 
+  final _couponCtrl = TextEditingController();
+  bool _isValidatingCoupon = false;
+  String? _appliedCouponCode;
+  double _discountAmount = 0.0;
+  String? _couponMessage;
+
   @override
   void initState() {
     super.initState();
@@ -56,12 +62,50 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
   }
 
   DateTime _combineDateAndSlot(DateTime date, String slot) {
-    // Slots are "HH:MM - HH:MM"; take the start time.
     final startStr = slot.split(' - ').first.trim();
     final parts = startStr.split(':');
     final hour = int.parse(parts[0]);
     final minute = int.parse(parts[1]);
     return DateTime(date.year, date.month, date.day, hour, minute);
+  }
+
+  Future<void> _validateCoupon() async {
+    final code = _couponCtrl.text.trim();
+    if (code.isEmpty) return;
+
+    setState(() {
+      _isValidatingCoupon = true;
+      _couponMessage = null;
+    });
+
+    try {
+      final res = await ref.read(marketingRepositoryProvider).validateCoupon(
+            tenantId: widget.draft.tenantId,
+            code: code,
+            amount: widget.draft.service.price,
+          );
+      if (!mounted) return;
+      setState(() {
+        if (res.isValid) {
+          _appliedCouponCode = res.code;
+          _discountAmount = res.discountAmount;
+          _couponMessage = 'Coupon applied successfully! (-₹${_discountAmount.toStringAsFixed(0)})';
+        } else {
+          _appliedCouponCode = null;
+          _discountAmount = 0.0;
+          _couponMessage = res.message ?? 'Invalid coupon';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _appliedCouponCode = null;
+        _discountAmount = 0.0;
+        _couponMessage = e is ApiException ? e.message : 'Validation failed';
+      });
+    } finally {
+      if (mounted) setState(() => _isValidatingCoupon = false);
+    }
   }
 
   Future<void> _confirmBooking() async {
@@ -84,6 +128,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
         serviceId: widget.draft.service.id,
         staffId: widget.draft.staff?.id,
         startTime: startTime,
+        couponCode: _appliedCouponCode,
       );
 
       if (!mounted) return;
@@ -283,7 +328,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: isSelected ? theme.colorScheme.primary.withOpacity(0.08) : theme.colorScheme.surface,
+                        color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.08) : theme.colorScheme.surface,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: isSelected ? theme.colorScheme.primary : Colors.grey.shade300),
                       ),
@@ -297,6 +342,48 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
                     ),
                   );
                 }).toList(),
+              ),
+            const SizedBox(height: 28),
+
+            const Text('Have a Coupon?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _couponCtrl,
+                    decoration: InputDecoration(
+                      hintText: 'Enter coupon code',
+                      filled: true,
+                      fillColor: theme.colorScheme.surface,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: _isValidatingCoupon ? null : _validateCoupon,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: _isValidatingCoupon
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Apply'),
+                ),
+              ],
+            ),
+            if (_couponMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  _couponMessage!,
+                  style: TextStyle(color: _appliedCouponCode != null ? Colors.green : Colors.red, fontSize: 13),
+                ),
               ),
             const SizedBox(height: 28),
 
@@ -317,24 +404,43 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: theme.cardColor,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -4))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -4))],
         ),
         child: SafeArea(
-          child: ElevatedButton(
-            onPressed: _isBooking ? null : _confirmBooking,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: theme.colorScheme.primary,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 54),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: _isBooking
-                ? const SizedBox(
-                    height: 24,
-                    width: 24,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  )
-                : const Text('Confirm Appointment', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_discountAmount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Final Price (after discount)', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                      Text(
+                        '₹${(widget.draft.service.price - _discountAmount).toStringAsFixed(0)}',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                      ),
+                    ],
+                  ),
+                ),
+              ElevatedButton(
+                onPressed: _isBooking ? null : _confirmBooking,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 54),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _isBooking
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Text('Confirm Appointment', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ],
           ),
         ),
       ),
@@ -348,7 +454,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? theme.colorScheme.primary.withOpacity(0.04) : theme.colorScheme.surface,
+          color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.04) : theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? theme.colorScheme.primary : Colors.grey.shade300,

@@ -3,6 +3,7 @@ import '../models/salon.dart';
 import '../models/booking.dart';
 import '../models/chat.dart';
 import '../models/wallet.dart';
+import '../models/marketing.dart';
 import 'api_providers.dart';
 
 final salonListProvider = FutureProvider.autoDispose.family<List<Salon>, String>((ref, search) {
@@ -23,4 +24,8 @@ final chatRoomsProvider = FutureProvider.autoDispose<List<ChatRoom>>((ref) {
 
 final walletDetailsProvider = FutureProvider.autoDispose<WalletDetails>((ref) {
   return ref.watch(walletRepositoryProvider).getWalletDetails();
+});
+
+final salonReviewsProvider = FutureProvider.autoDispose.family<List<SalonReview>, String>((ref, salonId) {
+  return ref.watch(marketingRepositoryProvider).getSalonReviews(salonId);
 });

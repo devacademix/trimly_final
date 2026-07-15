@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: '/salons', label: 'Salons', icon: Store },
   { href: '/users', label: 'Users', icon: Users },
   { href: '/bookings', label: 'Bookings', icon: CalendarRange },
+  { href: '/plans', label: 'Plans', icon: Store },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

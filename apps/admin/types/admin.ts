@@ -38,6 +38,27 @@ export interface AdminUser {
   profileImageUrl?: string | null;
 }
 
+export interface BankDetail {
+  id: string;
+  tenantId: string;
+  accountHolder: string;
+  bankName: string;
+  accountNumber: string;
+  ifsc: string;
+  upiId?: string | null;
+}
+
+export interface KycDocument {
+  id: string;
+  tenantId: string;
+  documentType: string;
+  fileUrl: string;
+  status: string;
+  remarks?: string | null;
+  verifiedAt?: string | null;
+  createdAt: string;
+}
+
 export interface Salon {
   id: string;
   slug: string;
@@ -46,6 +67,8 @@ export interface Salon {
   description?: string | null;
   gstNumber?: string | null;
   panNumber?: string | null;
+  businessCategory?: string | null;
+  businessRegNumber?: string | null;
   status: string;
   isActive: boolean;
   ownerEmail?: string | null;
@@ -56,7 +79,19 @@ export interface Salon {
   primaryCountry: string;
   currency: string;
   timezone: string;
+  area?: string | null;
+  fullAddress?: string | null;
+  state?: string | null;
+  country: string;
+  latitude?: number | null;
+  longitude?: number | null;
   commissionPct?: string | null;
+  onboardingStep?: string | null;
+  kycStatus?: string | null;
+  kycSubmittedAt?: string | null;
+  kycApprovedAt?: string | null;
+  kycRejectedAt?: string | null;
+  kycRemarks?: string | null;
   createdAt: string;
   updatedAt: string;
   _count?: {
@@ -64,6 +99,14 @@ export interface Salon {
     branches: number;
     bookings: number;
   };
+  bankDetails?: BankDetail | null;
+  kycDocuments?: KycDocument[];
+  websiteUrl?: string | null;
+  services?: any[];
+  workingHours?: any[];
+  holidays?: any[];
+  branches?: any[];
+  users?: any[];
 }
 
 export interface PlatformUser {

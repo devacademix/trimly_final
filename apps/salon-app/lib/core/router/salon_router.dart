@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
+import '../providers/onboarding_provider.dart' show onboardingControllerProvider, OnboardingStep;
 import '../../features/auth/salon_login_screen.dart';
+import '../../features/auth/salon_register_screen.dart';
+import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/bookings/bookings_list_screen.dart';
 import '../../features/navigation/salon_navigation.dart';
 import '../../features/ai/ai_assistant_screen.dart';
@@ -10,6 +13,13 @@ import '../../features/staff/staff_roster_screen.dart';
 import '../../features/inventory/inventory_screen.dart';
 import '../../features/chat/chat_list_screen.dart';
 import '../../features/chat/chat_conversation_screen.dart';
+import '../../features/dashboard/salon_profile_screen.dart';
+import '../../features/staff/services_screen.dart';
+import '../../features/more/business_hours_screen.dart';
+import '../../features/dashboard/analytics_screen.dart';
+import '../../features/more/coupons_screen.dart';
+import '../../features/more/reviews_screen.dart';
+import '../../features/payroll/payroll_screen.dart';
 
 /// Bridges Riverpod state changes into go_router's `refreshListenable`, so
 /// the router re-evaluates `redirect` whenever auth state changes (e.g.
@@ -37,10 +47,18 @@ final salonRouterProvider = Provider<GoRouter>((ref) {
         return path == '/' ? null : '/';
       }
       if (authState.status == AuthStatus.unauthenticated) {
+        if (path == '/register') return null;
         return path == '/login' ? null : '/login';
       }
-      // authenticated
-      if (path == '/login' || path == '/') return '/dashboard';
+      // authenticated — check onboarding status
+      final onboardingState = ref.read(onboardingControllerProvider);
+      if (onboardingState.currentStep != OnboardingStep.completed) {
+        if (path == '/onboarding') return null;
+        if (path == '/login') return null;
+        return '/onboarding';
+      }
+      
+      if (path == '/login' || path == '/register' || path == '/onboarding' || path == '/') return '/dashboard';
       return null;
     },
     routes: [
@@ -51,6 +69,14 @@ final salonRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/login',
         builder: (context, state) => const SalonLoginScreen(),
+      ),
+      GoRoute(
+        path: '/register',
+        builder: (context, state) => const SalonRegisterScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding',
+        builder: (context, state) => const OnboardingScreen(),
       ),
       GoRoute(
         path: '/dashboard',
@@ -83,6 +109,41 @@ final salonRouterProvider = Provider<GoRouter>((ref) {
           final title = state.extra as String? ?? 'Chat';
           return ChatConversationScreen(roomId: roomId, title: title);
         },
+      ),
+      GoRoute(
+        path: '/salon-profile',
+        builder: (context, state) => const SalonProfileScreen(),
+      ),
+      GoRoute(
+        path: '/services',
+        builder: (context, state) => const ServicesScreen(),
+      ),
+      GoRoute(
+        path: '/analytics',
+        builder: (context, state) => const AnalyticsScreen(),
+      ),
+      GoRoute(
+        path: '/customers',
+        builder: (context, state) => const Scaffold(
+          backgroundColor: Color(0xFF0F172A),
+          body: Center(child: Text('Customers — Coming Soon', style: TextStyle(color: Colors.white70))),
+        ),
+      ),
+      GoRoute(
+        path: '/business-hours',
+        builder: (context, state) => const BusinessHoursScreen(),
+      ),
+      GoRoute(
+        path: '/coupons',
+        builder: (context, state) => const CouponsScreen(),
+      ),
+      GoRoute(
+        path: '/reviews',
+        builder: (context, state) => const ReviewsScreen(),
+      ),
+      GoRoute(
+        path: '/payroll',
+        builder: (context, state) => const PayrollScreen(),
       ),
     ],
   );

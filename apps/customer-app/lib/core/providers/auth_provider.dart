@@ -80,9 +80,45 @@ class AuthController extends Notifier<AuthState> {
     }
   }
 
+  /// Returns true on success. On failure, [state.errorMessage] is set for
+  /// the signup screen to display.
+  Future<bool> register({
+    required String fullName,
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final user = await ref.read(authRepositoryProvider).register(
+            fullName: fullName,
+            email: email,
+            password: password,
+          );
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+      _registerPushToken();
+      return true;
+    } on ApiException catch (e) {
+      state = AuthState(status: AuthStatus.unauthenticated, errorMessage: e.message);
+      return false;
+    }
+  }
+
   Future<void> logout() async {
     await ref.read(authRepositoryProvider).logout();
     state = const AuthState(status: AuthStatus.unauthenticated);
+  }
+
+  Future<bool> completeOnboarding(Map<String, dynamic> data) async {
+    try {
+      final user = await ref.read(authRepositoryProvider).completeOnboarding(data);
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+      return true;
+    } on ApiException catch (e) {
+      state = AuthState(status: AuthStatus.authenticated, user: state.user, errorMessage: e.message);
+      return false;
+    } catch (e) {
+      state = AuthState(status: AuthStatus.authenticated, user: state.user, errorMessage: e.toString());
+      return false;
+    }
   }
 }
 

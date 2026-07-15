@@ -9,6 +9,7 @@
 # Stage 1: workspace dependency graph (package.json files only, for layer caching)
 FROM node:24-alpine AS deps
 WORKDIR /app
+RUN apk add --no-cache openssl
 RUN npm install -g pnpm
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/config/package.json ./packages/config/
@@ -42,9 +43,12 @@ RUN pnpm install --filter @trimly/backend... --prod --frozen-lockfile
 FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apk add --no-cache openssl
 RUN addgroup -S trimly && adduser -S trimly -G trimly
 
 COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=prod-deps /app/apps/backend/node_modules ./apps/backend/node_modules
+COPY --from=prod-deps /app/packages/database/node_modules ./packages/database/node_modules
 COPY --from=prod-deps /app/package.json ./package.json
 
 COPY --from=builder /app/packages/database/package.json ./packages/database/package.json
@@ -54,6 +58,8 @@ COPY --from=builder /app/packages/types/package.json ./packages/types/package.js
 COPY --from=builder /app/packages/types/dist ./packages/types/dist
 COPY --from=builder /app/apps/backend/package.json ./apps/backend/package.json
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
+
+RUN mkdir -p /app/uploads/temp && chown -R trimly:trimly /app/uploads
 
 USER trimly
 EXPOSE 4000

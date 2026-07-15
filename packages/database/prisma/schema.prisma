@@ -17,9 +17,51 @@ datasource db {
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
+enum BusinessCategory {
+  SALON
+  SPA
+  NAIL_STUDIO
+  BARBER
+  MAKEUP_STUDIO
+}
+
+enum DocumentType {
+  PAN
+  AADHAAR
+  GST
+  CANCELED_CHEQUE
+  PASSBOOK
+  SELFIE
+}
+
+enum KycStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum OnboardingStep {
+  WELCOME
+  MOBILE_VERIFICATION
+  BASIC_INFO
+  LOCATION
+  DETAILS
+  TIMING
+  PHOTOS
+  SERVICES
+  STAFF
+  BANK
+  KYC
+  SUBSCRIPTION
+  TOUR
+  COMPLETED
+}
+
 enum UserRole {
   SUPER_ADMIN
   SALON_OWNER
+  MANAGER
+  RECEPTIONIST
   STAFF
   CUSTOMER
 }
@@ -64,6 +106,11 @@ enum PaymentStatus {
   CAPTURED
   FAILED
   REFUNDED
+}
+
+enum PayrollStatus {
+  PENDING
+  PAID
 }
 
 enum PaymentMethod {
@@ -155,6 +202,11 @@ model User {
   updatedAt        DateTime     @updatedAt
   deletedAt        DateTime?
 
+  interests            String[]
+  locationAllowed      Boolean      @default(false)
+  notificationsAllowed Boolean      @default(false)
+  onboardingComplete   Boolean      @default(false)
+
   sessions         UserSession[]
   staffProfile     StaffProfile?
   favorites        CustomerFavorite[]
@@ -172,27 +224,42 @@ model User {
 }
 
 model Tenant {
-  id            String    @id @default(uuid()) @db.Uuid
-  slug          String    @unique(map: "tenants_slug_unique")
-  name          String
-  legalName     String?
-  description   String?
-  gstNumber     String?   @unique(map: "tenants_gst_unique")
-  panNumber     String?
-  status        String    @default("PENDING_APPROVAL")
-  isActive      Boolean   @default(true)
-  ownerEmail    String?
-  ownerPhone    String?
-  logoUrl       String?
-  coverImageUrl String?
-  primaryCity   String?
-  primaryCountry String   @default("IN")
-  currency      String   @default("INR")
-  timezone      String   @default("Asia/Kolkata")
-  commissionPct Decimal?  @db.Decimal(5, 2)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
+  id                String           @id @default(uuid()) @db.Uuid
+  slug              String           @unique(map: "tenants_slug_unique")
+  name              String
+  legalName         String?
+  description       String?
+  gstNumber         String?          @unique(map: "tenants_gst_unique")
+  panNumber         String?
+  businessCategory  BusinessCategory?
+  businessRegNumber String?
+  status            String           @default("PENDING_APPROVAL")
+  isActive          Boolean          @default(true)
+  ownerEmail        String?
+  ownerPhone        String?
+  logoUrl           String?
+  coverImageUrl     String?
+  websiteUrl        String?
+  primaryCity       String?
+  primaryCountry    String           @default("IN")
+  currency          String           @default("INR")
+  timezone          String           @default("Asia/Kolkata")
+  area              String?
+  fullAddress       String?
+  state             String?
+  country           String           @default("IN")
+  latitude          Float?
+  longitude         Float?
+  commissionPct     Decimal?         @db.Decimal(5, 2)
+  onboardingStep    OnboardingStep   @default(WELCOME)
+  kycStatus         KycStatus        @default(PENDING)
+  kycSubmittedAt    DateTime?
+  kycApprovedAt     DateTime?
+  kycRejectedAt     DateTime?
+  kycRemarks        String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
 
   users             User[]
   branches          Branch[]
@@ -211,10 +278,57 @@ model Tenant {
   subscriptions     SalonSubscription[]
   expenses          Expense[]
   wallets           Wallet[]
+  bankDetails       BankDetail?
+  kycDocuments      KycDocument[]
+  tenantGallery     TenantGallery[]
 
   @@index([status, isActive], map: "tenants_status_active_idx")
   @@index([slug], map: "tenants_slug_idx")
   @@map("tenants")
+}
+
+model BankDetail {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @unique @db.Uuid
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  accountHolder  String
+  bankName       String
+  accountNumber  String
+  ifsc           String
+  upiId          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("bank_details")
+}
+
+model KycDocument {
+  id           String           @id @default(uuid()) @db.Uuid
+  tenantId     String           @db.Uuid
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  documentType DocumentType
+  fileUrl      String
+  status       KycStatus        @default(PENDING)
+  remarks      String?
+  verifiedAt   DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([tenantId])
+  @@map("kyc_documents")
+}
+
+model TenantGallery {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  url       String
+  mediaType String   @default("IMAGE") // IMAGE, VIDEO
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@map("tenant_gallery")
 }
 
 // ─── Salon Structure ─────────────────────────────────────────────────────────
@@ -305,6 +419,8 @@ model StaffProfile {
   specialities    String[]
   rating          Decimal      @default(0.0) @db.Decimal(3, 2)
   isAvailable     Boolean      @default(true)
+  baseSalary      Decimal?     @default(0.0) @db.Decimal(10, 2)
+  commissionRate  Decimal?     @default(0.0) @db.Decimal(5, 2)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -313,6 +429,7 @@ model StaffProfile {
   leaves          StaffLeave[]
   availabilities  StaffAvailability[]
   bookings        Booking[]
+  payrollRecords  PayrollRecord[]
 
   @@index([tenantId])
   @@map("staff_profiles")
@@ -344,6 +461,26 @@ model StaffLeave {
   @@map("staff_leaves")
 }
 
+model PayrollRecord {
+  id               String       @id @default(uuid()) @db.Uuid
+  staffId          String       @db.Uuid
+  staff            StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  tenantId         String       @db.Uuid
+  periodMonth      Int
+  periodYear       Int
+  baseAmount       Decimal      @default(0.0) @db.Decimal(10, 2)
+  commissionAmount Decimal      @default(0.0) @db.Decimal(10, 2)
+  totalAmount      Decimal      @default(0.0) @db.Decimal(10, 2)
+  status           PayrollStatus @default(PENDING)
+  paidAt           DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([staffId, periodMonth, periodYear])
+  @@index([tenantId])
+  @@map("payroll_records")
+}
+
 // ─── Services & Packages ─────────────────────────────────────────────────────
 
 model ServiceCategory {
@@ -358,6 +495,7 @@ model ServiceCategory {
 
   services    Service[]
 
+  @@unique([tenantId, name])
   @@index([tenantId])
   @@map("service_categories")
 }

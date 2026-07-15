@@ -14,6 +14,10 @@ export class CreateBookingDto {
 
   @IsISO8601()
   startTime!: string;
+
+  @IsOptional()
+  @IsString()
+  couponCode?: string;
 }
 
 export class CancelBookingDto {

@@ -9,6 +9,43 @@
  */
 import { PrismaClient, UserRole, UserStatus, AuthProvider } from '../src/generated/prisma/index.js';
 import bcrypt from 'bcryptjs';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+
+function loadRootEnv() {
+  let currentDir = process.cwd();
+  const envPathCandidates: string[] = [];
+
+  while (true) {
+    const candidate = join(currentDir, '.env');
+    if (existsSync(candidate)) {
+      envPathCandidates.push(candidate);
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) break;
+    currentDir = parentDir;
+  }
+
+  const envPath = envPathCandidates.at(-1);
+  if (!envPath) return;
+
+  for (const line of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    const separatorIndex = trimmed.indexOf('=');
+    if (separatorIndex === -1) continue;
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    const rawValue = trimmed.slice(separatorIndex + 1).trim();
+    if (!key || process.env[key] !== undefined) continue;
+
+    process.env[key] = rawValue.replace(/^(['"])(.*)\1$/, '$2');
+  }
+}
+
+loadRootEnv();
 
 const prisma = new PrismaClient();
 

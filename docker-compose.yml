@@ -1,10 +1,11 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Trimly — local development infrastructure.
-#   docker compose up -d        start postgres + redis
-#   docker compose ps           status
-#   docker compose logs -f      tail logs
-#   docker compose down         stop (keeps data volumes)
-#   docker compose down -v      stop AND delete data ⚠
+#   docker compose up -d                start everything (infra + apps)
+#   docker compose up -d postgres redis  start only infra
+#   docker compose ps                   status
+#   docker compose logs -f              tail logs
+#   docker compose down                 stop (keeps data volumes)
+#   docker compose down -v              stop AND delete data ⚠
 #
 # Credentials here are for LOCAL DEV ONLY. Production secrets come from your
 # orchestrator / secrets manager, never this file.
@@ -57,6 +58,44 @@ services:
     ports:
       - "1025:1025"  # SMTP
       - "8025:8025"  # Web UI
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: trimly-backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://trimly:trimly@postgres:5432/trimly?schema=public
+      DIRECT_DATABASE_URL: postgresql://trimly:trimly@postgres:5432/trimly?schema=public
+      REDIS_URL: redis://redis:6379
+      PORT: "4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    container_name: trimly-admin
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:4000/api/v1
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    depends_on:
+      - backend
 
 volumes:
   trimly_pg_data:

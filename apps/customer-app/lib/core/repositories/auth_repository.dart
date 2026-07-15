@@ -31,6 +31,41 @@ class AuthRepository {
     }
   }
 
+  Future<AuthUser> register({
+    required String fullName,
+    required String email,
+    required String password,
+  }) async {
+    try {
+      // Step 1: Create the account
+      await apiClient.dio.post('/auth/register', data: {
+        'fullName': fullName,
+        'email': email,
+        'password': password,
+        'role': 'CUSTOMER',
+      });
+
+      // Step 2: Auto-login with the new credentials so session is set
+      final loginResponse = await apiClient.dio.post('/auth/login', data: {
+        'email': email,
+        'password': password,
+      });
+      final data = loginResponse.data['data'] as Map<String, dynamic>;
+      final user = AuthUser.fromJson(data['user'] as Map<String, dynamic>);
+
+      await secureStorage.saveSession(
+        accessToken: data['accessToken'] as String,
+        refreshToken: data['refreshToken'] as String,
+      );
+      await secureStorage.saveTenantId(user.tenantId);
+
+      return user;
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
+
   /// Returns null if there's no session or it's no longer valid — the
   /// caller (AuthController) treats that as "not logged in", not an error.
   Future<AuthUser?> fetchCurrentUser() async {
@@ -56,5 +91,16 @@ class AuthRepository {
       }
     }
     await secureStorage.clear();
+  }
+
+  Future<AuthUser> completeOnboarding(Map<String, dynamic> data) async {
+    try {
+      final response = await apiClient.dio.post('/onboarding/customer/complete', data: data);
+      final responseData = response.data;
+      final userData = responseData['data'] ?? responseData;
+      return AuthUser.fromJson(userData as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
   }
 }

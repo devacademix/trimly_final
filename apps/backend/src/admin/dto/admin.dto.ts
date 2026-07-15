@@ -1,4 +1,5 @@
 import { IsBoolean, IsEnum, IsNumber, Max, Min } from 'class-validator';
+import { UserRole, UserStatus } from '@trimly/types';
 
 // Tenant.status is a free-form String column (no DB enum), so we constrain
 // it to known application states at the validation layer.
@@ -30,3 +31,14 @@ export class SetGlobalCommissionDto {
   @Max(100)
   commissionPct!: number;
 }
+
+export class UpdateUserStatusDto {
+  @IsEnum(UserStatus)
+  status!: UserStatus;
+}
+
+export class UpdateUserRoleDto {
+  @IsEnum(UserRole)
+  role!: UserRole;
+}
+

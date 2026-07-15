@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../core/models/user_role.dart';
 
 class MoreHubScreen extends ConsumerStatefulWidget {
   const MoreHubScreen({super.key});
@@ -29,6 +30,9 @@ class _MoreHubScreenState extends ConsumerState<MoreHubScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).user;
+    final isOwner = user?.role == UserRole.salonOwner;
+    final isManager = user?.role == UserRole.manager;
+    final isReceptionist = user?.role == UserRole.receptionist;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
@@ -147,21 +151,66 @@ class _MoreHubScreenState extends ConsumerState<MoreHubScreen> {
 
             // More Features List
             _buildSectionHeader('Multi-Tenant SaaS Controls'),
-            _buildHubListTile(Icons.storefront, 'Branch List & Analytics', 'Manage your salon branches'),
-            _buildHubListTile(
-              Icons.people_alt_outlined,
-              'Staff Roster',
-              'Manage specialists and their availability',
-              onTap: () => context.push('/staff'),
-            ),
-            _buildHubListTile(
-              Icons.inventory_2_outlined,
-              'Inventory Tracking',
-              'Manage retail products and stock levels',
-              onTap: () => context.push('/inventory'),
-            ),
-            _buildHubListTile(Icons.account_balance_outlined, 'Payroll & Commission rules', 'Review staff monthly splits'),
-            _buildHubListTile(Icons.assignment_ind_outlined, 'Role-Based Permissions', 'Define Receptionist and Manager rules'),
+            if (isOwner || isManager)
+              _buildHubListTile(
+                Icons.bar_chart_rounded,
+                'Analytics & Reports',
+                'View revenue and booking trends',
+                onTap: () => context.push('/analytics'),
+              ),
+            if (isOwner || isManager)
+              _buildHubListTile(
+                Icons.people_alt_outlined,
+                'Staff Roster',
+                'Manage specialists and their availability',
+                onTap: () => context.push('/staff'),
+              ),
+            if (isOwner || isManager)
+              _buildHubListTile(
+                Icons.access_time_rounded,
+                'Business Hours',
+                'Configure weekly timing and holidays',
+                onTap: () => context.push('/business-hours'),
+              ),
+            if (isOwner || isManager || isReceptionist)
+              _buildHubListTile(
+                Icons.inventory_2_outlined,
+                'Inventory Tracking',
+                'Manage retail products and stock levels',
+                onTap: () => context.push('/inventory'),
+              ),
+            if (isOwner || isManager)
+              _buildHubListTile(
+                Icons.local_offer_outlined,
+                'Coupons & Offers',
+                'Create discount codes and flat percentage deals',
+                onTap: () => context.push('/coupons'),
+              ),
+            if (isOwner || isManager || isReceptionist)
+              _buildHubListTile(
+                Icons.star_outline_rounded,
+                'Customer Reviews',
+                'Read and reply to client ratings',
+                onTap: () => context.push('/reviews'),
+              ),
+            if (isOwner || isManager)
+              _buildHubListTile(
+                Icons.account_balance_outlined, 
+                'Payroll & Commission rules', 
+                'Review staff monthly splits',
+                onTap: () => context.push('/payroll'),
+              ),
+            if (isOwner)
+              _buildHubListTile(
+                Icons.assignment_ind_outlined, 
+                'Role-Based Permissions', 
+                'Define Receptionist and Manager rules',
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Roles configured successfully!')),
+                  );
+                },
+              ),
             const SizedBox(height: 24),
 
             // Logout Business

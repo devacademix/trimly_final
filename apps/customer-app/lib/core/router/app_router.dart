@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../models/booking_draft.dart';
 import '../../features/auth/login_screen.dart';
+import '../../features/auth/signup_screen.dart';
+import '../../features/onboarding/customer_onboarding_screen.dart';
 import '../../features/salon/salon_details_screen.dart';
 import '../../features/booking/booking_screen.dart';
 import '../../features/navigation/main_navigation.dart';
@@ -17,7 +19,10 @@ import '../../features/chat/chat_conversation_screen.dart';
 class _RouterRefreshNotifier extends ChangeNotifier {
   _RouterRefreshNotifier(Ref ref) {
     ref.listen(authControllerProvider, (previous, next) {
-      if (previous?.status != next.status) notifyListeners();
+      if (previous?.status != next.status || 
+          previous?.user?.onboardingComplete != next.user?.onboardingComplete) {
+        notifyListeners();
+      }
     });
   }
 }
@@ -37,10 +42,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         return path == '/' ? null : '/';
       }
       if (authState.status == AuthStatus.unauthenticated) {
-        return path == '/login' ? null : '/login';
+        if (path == '/login' || path == '/signup') return null;
+        return '/login';
       }
       // authenticated
-      if (path == '/login' || path == '/') return '/home';
+      final user = authState.user;
+      if (user != null && !user.onboardingComplete) {
+        if (path == '/onboarding' || path == '/login' || path == '/signup' || path == '/') return '/onboarding';
+        return null;
+      }
+      
+      if (path == '/login' || path == '/signup' || path == '/' || path == '/onboarding') return '/home';
       return null;
     },
     routes: [
@@ -49,8 +61,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
+        path: '/onboarding',
+        builder: (context, state) => const CustomerOnboardingScreen(),
+      ),
+      GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/signup',
+        builder: (context, state) => const SignupScreen(),
       ),
       GoRoute(
         path: '/home',

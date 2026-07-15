@@ -5,6 +5,7 @@ import '../repositories/salon_repository.dart';
 import '../repositories/booking_repository.dart';
 import '../repositories/chat_repository.dart';
 import '../repositories/wallet_repository.dart';
+import '../repositories/marketing_repository.dart';
 import '../services/push_notification_service.dart';
 import '../services/chat_socket_service.dart';
 import '../storage/secure_storage.dart';
@@ -47,4 +48,8 @@ final chatSocketServiceProvider = Provider<ChatSocketService>((ref) {
 
 final walletRepositoryProvider = Provider<WalletRepository>((ref) {
   return WalletRepository(apiClient: ref.watch(apiClientProvider));
+});
+
+final marketingRepositoryProvider = Provider<MarketingRepository>((ref) {
+  return MarketingRepository(apiClient: ref.watch(apiClientProvider));
 });

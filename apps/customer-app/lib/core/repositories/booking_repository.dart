@@ -56,8 +56,8 @@ class BookingRepository {
         queryParameters: {
           'branchId': branchId,
           'date': date.toIso8601String(),
-          if (staffId != null) 'staffId': staffId,
-        },
+          'staffId': staffId,
+        }..removeWhere((_, v) => v == null),
         options: _tenantHeader(tenantId),
       );
       return AvailabilityResult.fromJson(response.data['data'] as Map<String, dynamic>);
@@ -72,6 +72,7 @@ class BookingRepository {
     required String serviceId,
     required DateTime startTime,
     String? staffId,
+    String? couponCode,
   }) async {
     try {
       final response = await apiClient.dio.post(
@@ -80,8 +81,9 @@ class BookingRepository {
           'branchId': branchId,
           'serviceId': serviceId,
           'startTime': startTime.toIso8601String(),
-          if (staffId != null) 'staffId': staffId,
-        },
+          'staffId': staffId,
+          'couponCode': couponCode,
+        }..removeWhere((_, v) => v == null),
         options: _tenantHeader(tenantId),
       );
       return Booking.fromJson(response.data['data'] as Map<String, dynamic>);
@@ -105,9 +107,8 @@ class BookingRepository {
 
   Future<List<Booking>> listMyBookings({BookingStatus? status}) async {
     try {
-      final response = await apiClient.dio.get('/booking', queryParameters: {
-        if (status != null) 'status': status.value,
-      });
+      final response = await apiClient.dio.get('/booking',
+          queryParameters: status != null ? {'status': status.value} : null);
       final list = response.data['data'] as List;
       return list.map((json) => Booking.fromJson(json as Map<String, dynamic>)).toList();
     } on DioException catch (e) {
@@ -117,9 +118,10 @@ class BookingRepository {
 
   Future<Booking> cancelBooking(String id, {String? notes}) async {
     try {
-      final response = await apiClient.dio.patch('/booking/$id/cancel', data: {
-        if (notes != null) 'notes': notes,
-      });
+      final response = await apiClient.dio.patch(
+        '/booking/$id/cancel',
+        data: notes != null ? {'notes': notes} : null,
+      );
       return Booking.fromJson(response.data['data'] as Map<String, dynamic>);
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);

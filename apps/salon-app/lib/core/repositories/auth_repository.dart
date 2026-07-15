@@ -10,6 +10,25 @@ class AuthRepository {
 
   AuthRepository({required this.apiClient, required this.secureStorage});
 
+  Future<AuthUser> register({
+    required String email,
+    required String password,
+    required String fullName,
+  }) async {
+    try {
+      final response = await apiClient.dio.post('/auth/register', data: {
+        'email': email,
+        'password': password,
+        'fullName': fullName,
+        'role': 'SALON_OWNER',
+      });
+      final data = response.data['data'] as Map<String, dynamic>;
+      return AuthUser.fromJson(data);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
   Future<AuthUser> login({required String email, required String password}) async {
     try {
       final response = await apiClient.dio.post('/auth/login', data: {

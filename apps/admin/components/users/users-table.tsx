@@ -4,11 +4,13 @@ import { useState } from 'react';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableEmpty } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { RoleBadge } from './role-badge';
 import { UserStatusBadge } from './user-status-badge';
+import { UserActionsDialog } from './user-actions-dialog';
 import { useUsers } from '@/lib/hooks/use-admin';
 import { formatDate } from '@/lib/utils';
-import { UserRole } from '@/types/admin';
+import { UserRole, type PlatformUser } from '@/types/admin';
 
 const ROLE_FILTERS: { value: UserRole | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All roles' },
@@ -20,6 +22,7 @@ const ROLE_FILTERS: { value: UserRole | 'ALL'; label: string }[] = [
 
 export function UsersTable() {
   const [roleFilter, setRoleFilter] = useState<UserRole | 'ALL'>('ALL');
+  const [actionTarget, setActionTarget] = useState<PlatformUser | null>(null);
   const { data, isLoading, isError } = useUsers(roleFilter === 'ALL' ? undefined : roleFilter);
 
   return (
@@ -56,10 +59,11 @@ export function UsersTable() {
               <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Joined</TableHead>
+              <TableHead className="w-[100px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.length === 0 && <TableEmpty colSpan={5}>No users found.</TableEmpty>}
+            {data.length === 0 && <TableEmpty colSpan={6}>No users found.</TableEmpty>}
             {data.map((user) => (
               <TableRow key={user.id}>
                 <TableCell className="font-medium text-slate-900 dark:text-slate-100">
@@ -73,10 +77,25 @@ export function UsersTable() {
                   <UserStatusBadge status={user.status} />
                 </TableCell>
                 <TableCell>{formatDate(user.createdAt)}</TableCell>
+                <TableCell>
+                  <Button variant="outline" size="sm" onClick={() => setActionTarget(user)}>
+                    Actions
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+      )}
+
+      {actionTarget && (
+        <UserActionsDialog
+          user={actionTarget}
+          open={!!actionTarget}
+          onOpenChange={(open) => {
+            if (!open) setActionTarget(null);
+          }}
+        />
       )}
     </div>
   );

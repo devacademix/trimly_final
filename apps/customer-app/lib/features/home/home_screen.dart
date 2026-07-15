@@ -69,7 +69,7 @@ class HomeScreen extends ConsumerWidget {
                           const SizedBox(height: 8),
                           Text(
                             'On your first salon appointment booking.',
-                            style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14),
+                            style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 14),
                           ),
                         ],
                       ),
@@ -132,7 +132,7 @@ class HomeScreen extends ConsumerWidget {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.08),
+            color: theme.colorScheme.primary.withValues(alpha: 0.08),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: theme.colorScheme.primary, size: 28),

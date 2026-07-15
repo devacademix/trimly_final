@@ -215,7 +215,7 @@ class _PaymentGatewayScreenState extends ConsumerState<PaymentGatewayScreen> {
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
                 child: Text(_statusMessage!, style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
               ),
             ],
@@ -250,15 +250,15 @@ class _PaymentGatewayScreenState extends ConsumerState<PaymentGatewayScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: color.withOpacity(0.2), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.2), shape: BoxShape.circle),
             child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(width: 16),

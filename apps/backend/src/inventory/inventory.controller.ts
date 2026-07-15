@@ -13,13 +13,13 @@ import { CreateCategoryDto, CreateProductDto, StockMovementDto, LogExpenseDto } 
 @ApiBearerAuth()
 @ApiHeader({ name: 'x-tenant-id' })
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
-@Roles(UserRole.SALON_OWNER, UserRole.STAFF)
+@Roles(UserRole.SALON_OWNER, UserRole.MANAGER, UserRole.RECEPTIONIST, UserRole.STAFF)
 @Controller('inventory')
 export class InventoryController {
   constructor(private inventoryService: InventoryService) {}
 
   @Post('categories')
-  @Roles(UserRole.SALON_OWNER)
+  @Roles(UserRole.SALON_OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Create a new product category' })
   async createCategory(
     @TenantId() tenantId: string,
@@ -43,7 +43,7 @@ export class InventoryController {
   }
 
   @Post('products')
-  @Roles(UserRole.SALON_OWNER)
+  @Roles(UserRole.SALON_OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Add a new retail product' })
   async createProduct(
     @TenantId() tenantId: string,
@@ -80,7 +80,7 @@ export class InventoryController {
   }
 
   @Post('expenses')
-  @Roles(UserRole.SALON_OWNER)
+  @Roles(UserRole.SALON_OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Log salon business expense' })
   async logExpense(
     @TenantId() tenantId: string,
@@ -94,7 +94,7 @@ export class InventoryController {
   }
 
   @Get('expenses')
-  @Roles(UserRole.SALON_OWNER)
+  @Roles(UserRole.SALON_OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'List salon business expenses' })
   async getExpenses(@TenantId() tenantId: string): Promise<ApiResponse<any>> {
     const expenses = await this.inventoryService.getExpenses(tenantId);

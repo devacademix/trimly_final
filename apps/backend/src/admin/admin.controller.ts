@@ -1,11 +1,11 @@
-import { Controller, Get, Patch, Post, Body, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Delete, Body, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { UserRole, ApiResponse } from '@trimly/types';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { UpdateSalonStatusDto, UpdateSalonCommissionDto, SetGlobalCommissionDto } from './dto/admin.dto';
+import { UpdateSalonStatusDto, UpdateSalonCommissionDto, SetGlobalCommissionDto, UpdateUserStatusDto, UpdateUserRoleDto } from './dto/admin.dto';
 
 @ApiTags('Super Admin Control')
 @ApiBearerAuth()
@@ -88,6 +88,52 @@ export class AdminController {
     return {
       success: true,
       data: stats,
+    };
+  }
+
+  @Delete('salons/:id')
+  @ApiOperation({ summary: 'Hard-delete a salon/tenant from the database' })
+  async deleteSalon(@Param('id', ParseUUIDPipe) id: string): Promise<ApiResponse<any>> {
+    await this.adminService.deleteSalon(id);
+    return {
+      success: true,
+      data: { message: 'Salon successfully purged from database' },
+    };
+  }
+
+  @Patch('users/:id/status')
+  @ApiOperation({ summary: 'Update status/block a user' })
+  async updateUserStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUserStatusDto,
+  ): Promise<ApiResponse<any>> {
+    const user = await this.adminService.updateUserStatus(id, dto.status);
+    return {
+      success: true,
+      data: user,
+    };
+  }
+
+  @Patch('users/:id/role')
+  @ApiOperation({ summary: 'Change user role' })
+  async updateUserRole(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUserRoleDto,
+  ): Promise<ApiResponse<any>> {
+    const user = await this.adminService.updateUserRole(id, dto.role);
+    return {
+      success: true,
+      data: user,
+    };
+  }
+
+  @Delete('users/:id')
+  @ApiOperation({ summary: 'Hard-delete a user from database' })
+  async deleteUser(@Param('id', ParseUUIDPipe) id: string): Promise<ApiResponse<any>> {
+    await this.adminService.deleteUser(id);
+    return {
+      success: true,
+      data: { message: 'User successfully purged from database' },
     };
   }
 }

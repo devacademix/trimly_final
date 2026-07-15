@@ -19,6 +19,10 @@ import { InventoryModule } from './inventory/inventory.module';
 import { ChatModule } from './chat/chat.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { DiscoveryModule } from './discovery/discovery.module';
+import { UploadModule } from './upload/upload.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
+import { PlansModule } from './plans/plans.module';
+import { PayrollModule } from './payroll/payroll.module';
 
 @Module({
   imports: [
@@ -49,6 +53,10 @@ import { DiscoveryModule } from './discovery/discovery.module';
     ChatModule,
     MetricsModule,
     DiscoveryModule,
+    UploadModule,
+    OnboardingModule,
+    PlansModule,
+    PayrollModule,
   ],
   providers: [
     {

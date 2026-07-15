@@ -12,7 +12,10 @@ export class SalonService {
 
   // Get Salon business profile details
   async getProfile(tenantId: string) {
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: { workingHours: true },
+    });
     if (!tenant) {
       throw new NotFoundException('Salon business profile not found');
     }
@@ -33,6 +36,10 @@ export class SalonService {
         ownerPhone: data.ownerPhone,
         logoUrl: data.logoUrl,
         coverImageUrl: data.coverImageUrl,
+        websiteUrl: data.websiteUrl,
+        fullAddress: data.fullAddress,
+        area: data.area,
+        state: data.state,
         primaryCity: data.primaryCity,
         primaryCountry: data.primaryCountry,
         timezone: data.timezone,
@@ -203,5 +210,47 @@ export class SalonService {
         }),
       ),
     );
+  }
+
+  // Toggle shop open/closed status
+  async updateShopStatus(tenantId: string, isOpen: boolean) {
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { status: isOpen ? 'ACTIVE' : 'TEMPORARILY_CLOSED' },
+    });
+    return isOpen ? 'ACTIVE' : 'TEMPORARILY_CLOSED';
+  }
+
+  // Update a service
+  async updateService(tenantId: string, serviceId: string, data: any) {
+    return this.prisma.service.update({
+      where: { id: serviceId, tenantId },
+      data: {
+        name: data.name,
+        description: data.description,
+        price: data.price,
+        duration: data.duration,
+        categoryId: data.categoryId,
+        imageUrl: data.imageUrl,
+        isActive: data.isActive,
+      },
+      include: { category: true },
+    });
+  }
+
+  // Soft delete a service
+  async deleteService(tenantId: string, serviceId: string) {
+    return this.prisma.service.update({
+      where: { id: serviceId, tenantId },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  // Toggle staff active status
+  async updateStaffStatus(tenantId: string, staffId: string, isActive: boolean) {
+    return this.prisma.staffProfile.update({
+      where: { id: staffId, tenantId },
+      data: { isAvailable: isActive },
+    });
   }
 }

@@ -140,6 +140,26 @@ export class BookingService {
     const startTime = new Date(data.startTime);
     const endTime = new Date(startTime.getTime() + service.duration * 60 * 1000);
 
+    let finalPrice = Number(service.price);
+    let appliedCouponId: string | null = null;
+
+    if (data.couponCode) {
+      const coupon = await this.prisma.coupon.findFirst({
+        where: { tenantId, code: data.couponCode.toUpperCase(), isActive: true },
+      });
+      if (coupon && coupon.startDate <= new Date() && coupon.endDate >= new Date()) {
+        if (coupon.usageLimit === null || coupon.usedCount < coupon.usageLimit) {
+          if (coupon.type === 'FLAT') {
+            finalPrice = Math.max(0, finalPrice - Number(coupon.value));
+          } else if (coupon.type === 'PERCENTAGE') {
+            const discount = (finalPrice * Number(coupon.value)) / 100;
+            finalPrice = Math.max(0, finalPrice - discount);
+          }
+          appliedCouponId = coupon.id;
+        }
+      }
+    }
+
     const booking = await this.prisma.$transaction(async (tx) => {
       const created = await tx.booking.create({
         data: {
@@ -150,7 +170,7 @@ export class BookingService {
           startTime,
           endTime,
           status: BookingStatus.PENDING,
-          totalPrice: service.price,
+          totalPrice: finalPrice,
         },
       });
 
@@ -161,6 +181,20 @@ export class BookingService {
           price: service.price,
         },
       });
+
+      if (appliedCouponId) {
+        await tx.couponUsage.create({
+          data: {
+            couponId: appliedCouponId,
+            userId: customerId,
+            orderId: created.id,
+          },
+        });
+        await tx.coupon.update({
+          where: { id: appliedCouponId },
+          data: { usedCount: { increment: 1 } },
+        });
+      }
 
       await tx.bookingHistory.create({
         data: {
@@ -189,7 +223,7 @@ export class BookingService {
       }
       return;
     }
-    if (user.role === UserRole.SALON_OWNER || user.role === UserRole.STAFF) {
+    if (user.role === UserRole.SALON_OWNER || user.role === UserRole.MANAGER || user.role === UserRole.RECEPTIONIST || user.role === UserRole.STAFF) {
       if (booking.tenantId !== user.tenantId) {
         throw new ForbiddenException('You do not have access to this booking');
       }
@@ -226,6 +260,7 @@ export class BookingService {
     this.notificationService.notifyBookingStatusChange(bookingId, BookingStatus.CANCELLED).catch(() => undefined);
 
     return updated;
+
   }
 
   // Reschedule Booking
@@ -272,7 +307,7 @@ export class BookingService {
 
     if (user.role === UserRole.CUSTOMER) {
       where.customerId = user.id;
-    } else if (user.role === UserRole.SALON_OWNER || user.role === UserRole.STAFF) {
+    } else if (user.role === UserRole.SALON_OWNER || user.role === UserRole.MANAGER || user.role === UserRole.RECEPTIONIST || user.role === UserRole.STAFF) {
       if (!user.tenantId) return [];
       where.tenantId = user.tenantId;
     } else {
@@ -293,7 +328,7 @@ export class BookingService {
 
   // Salon owner/staff transitions a booking's status (confirm, complete, no-show, cancel).
   async updateBookingStatus(bookingId: string, user: RequestingUser, status: BookingStatus) {
-    if (user.role !== UserRole.SALON_OWNER && user.role !== UserRole.STAFF && user.role !== UserRole.SUPER_ADMIN) {
+    if (user.role !== UserRole.SALON_OWNER && user.role !== UserRole.MANAGER && user.role !== UserRole.RECEPTIONIST && user.role !== UserRole.STAFF && user.role !== UserRole.SUPER_ADMIN) {
       throw new ForbiddenException('You do not have permission to update booking status');
     }
 

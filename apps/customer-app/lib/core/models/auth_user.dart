@@ -11,6 +11,7 @@ class AuthUser {
   final String? tenantId;
   final String? profileImageUrl;
   final String? referralCode;
+  final bool onboardingComplete;
 
   const AuthUser({
     required this.id,
@@ -22,6 +23,7 @@ class AuthUser {
     this.tenantId,
     this.profileImageUrl,
     this.referralCode,
+    this.onboardingComplete = false,
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
@@ -35,6 +37,7 @@ class AuthUser {
       tenantId: json['tenantId'] as String?,
       profileImageUrl: json['profileImageUrl'] as String?,
       referralCode: json['referralCode'] as String?,
+      onboardingComplete: json['onboardingComplete'] as bool? ?? false,
     );
   }
 

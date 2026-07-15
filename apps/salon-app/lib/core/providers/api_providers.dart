@@ -6,6 +6,7 @@ import '../repositories/wallet_repository.dart';
 import '../repositories/salon_repository.dart';
 import '../repositories/inventory_repository.dart';
 import '../repositories/chat_repository.dart';
+import '../repositories/payroll_repository.dart';
 import '../services/push_notification_service.dart';
 import '../services/chat_socket_service.dart';
 import '../storage/secure_storage.dart';
@@ -46,6 +47,10 @@ final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) 
 
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   return ChatRepository(apiClient: ref.watch(apiClientProvider));
+});
+
+final payrollRepositoryProvider = Provider<PayrollRepository>((ref) {
+  return PayrollRepository(apiClient: ref.watch(apiClientProvider));
 });
 
 final chatSocketServiceProvider = Provider<ChatSocketService>((ref) {

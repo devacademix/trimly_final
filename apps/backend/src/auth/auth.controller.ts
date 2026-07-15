@@ -64,6 +64,20 @@ export class AuthController {
     };
   }
 
+  @Post('otp/link-phone')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Throttle(BRUTE_FORCE_THROTTLE)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Link verified phone number to the current authenticated user' })
+  async linkPhone(@CurrentUser() user: any, @Body() dto: VerifyOtpDto): Promise<ApiResponse<any>> {
+    const res = await this.authService.linkPhone(user.id, dto.phone, dto.otp);
+    return {
+      success: true,
+      data: res.user,
+    };
+  }
+
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh active login session' })

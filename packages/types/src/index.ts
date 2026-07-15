@@ -17,6 +17,8 @@
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
   SALON_OWNER = 'SALON_OWNER',
+  MANAGER = 'MANAGER',
+  RECEPTIONIST = 'RECEPTIONIST',
   STAFF = 'STAFF',
   CUSTOMER = 'CUSTOMER',
 }
@@ -156,4 +158,5 @@ export interface AuthUser {
   tenantId?: string | null;
   profileImageUrl?: string | null;
   referralCode?: string | null;
+  onboardingComplete?: boolean;
 }

@@ -63,6 +63,22 @@ export class UpdateSalonProfileDto {
 
   @IsOptional()
   @IsString()
+  websiteUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  fullAddress?: string;
+
+  @IsOptional()
+  @IsString()
+  area?: string;
+
+  @IsOptional()
+  @IsString()
+  state?: string;
+
+  @IsOptional()
+  @IsString()
   primaryCity?: string;
 
   @IsOptional()

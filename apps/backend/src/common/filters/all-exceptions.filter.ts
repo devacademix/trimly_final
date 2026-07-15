@@ -21,6 +21,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<{ method: string; url: string }>();
 
+    console.error("RAW EXCEPTION CAUGHT:", exception);
+    
     const { status, error } = this.resolve(exception);
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {

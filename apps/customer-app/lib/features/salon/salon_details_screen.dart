@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/models/salon.dart';
 import '../../core/models/booking_draft.dart';
+import '../../core/models/marketing.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/providers/api_providers.dart';
 import '../../core/providers/data_providers.dart';
@@ -20,6 +21,83 @@ class _SalonDetailsScreenState extends ConsumerState<SalonDetailsScreen> {
   SalonStaff? _selectedStaff;
   SalonService? _selectedService;
   bool _isStartingChat = false;
+
+  Future<void> _showReviewDialog(String tenantId) async {
+    final ctrl = TextEditingController();
+    int rating = 5;
+    bool submitting = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 20, right: 20, top: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Write a Review', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  return IconButton(
+                    icon: Icon(
+                      index < rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                      color: Colors.amber,
+                      size: 36,
+                    ),
+                    onPressed: () => setDialogState(() => rating = index + 1),
+                  );
+                }),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'Share your experience (optional)',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: submitting ? null : () async {
+                    setDialogState(() => submitting = true);
+                    try {
+                      await ref.read(marketingRepositoryProvider).createReview(
+                            tenantId: tenantId,
+                            rating: rating,
+                            comment: ctrl.text.trim().isEmpty ? null : ctrl.text.trim(),
+                          );
+                      ref.invalidate(salonReviewsProvider(widget.salonId));
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    } catch (e) {
+                      setDialogState(() => submitting = false);
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e is ApiException ? e.message : '$e')));
+                      }
+                    }
+                  },
+                  child: submitting ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Submit Review'),
+                ),
+              ),
+              const SizedBox(height: 30),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _messageSalon(SalonDetail detail) async {
     if (detail.ownerId == null || _isStartingChat) return;
@@ -92,7 +170,7 @@ class _SalonDetailsScreenState extends ConsumerState<SalonDetailsScreen> {
                 if (salon.coverImageUrl != null)
                   Image.network(salon.coverImageUrl!, fit: BoxFit.cover)
                 else
-                  Container(color: theme.colorScheme.primary.withOpacity(0.2)),
+                  Container(color: theme.colorScheme.primary.withValues(alpha: 0.2)),
                 const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -167,7 +245,7 @@ class _SalonDetailsScreenState extends ConsumerState<SalonDetailsScreen> {
                               width: 100,
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: isSelected ? theme.colorScheme.primary.withOpacity(0.08) : theme.colorScheme.surface,
+                                color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.08) : theme.colorScheme.surface,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
                                   color: isSelected ? theme.colorScheme.primary : Colors.transparent,
@@ -218,7 +296,7 @@ class _SalonDetailsScreenState extends ConsumerState<SalonDetailsScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: isSelected ? theme.colorScheme.primary.withOpacity(0.04) : theme.colorScheme.surface,
+                              color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.04) : theme.colorScheme.surface,
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(color: isSelected ? theme.colorScheme.primary : Colors.grey.shade300),
                             ),
@@ -255,6 +333,78 @@ class _SalonDetailsScreenState extends ConsumerState<SalonDetailsScreen> {
                         );
                       },
                     ),
+                  const Divider(height: 48),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Customer Reviews', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      TextButton(
+                        onPressed: () => _showReviewDialog(detail.summary.id),
+                        child: const Text('Write a Review'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ref.watch(salonReviewsProvider(widget.salonId)).when(
+                        loading: () => const Center(child: CircularProgressIndicator()),
+                        error: (e, _) => Center(child: Text('Failed to load reviews: $e')),
+                        data: (reviews) {
+                          if (reviews.isEmpty) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              child: Text('No reviews yet. Be the first to review!', style: TextStyle(color: Colors.grey)),
+                            );
+                          }
+                          return ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: reviews.length,
+                            separatorBuilder: (context, index) => const Divider(height: 32),
+                            itemBuilder: (context, index) {
+                              final review = reviews[index];
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(review.customerName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                      Row(
+                                        children: List.generate(5, (starIdx) {
+                                          return Icon(
+                                            starIdx < review.rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                                            color: Colors.amber,
+                                            size: 16,
+                                          );
+                                        }),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  if (review.comment != null && review.comment!.isNotEmpty)
+                                    Text(review.comment!, style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
+                                  if (review.replies.isNotEmpty)
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 8),
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Reply from Salon', style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary, fontSize: 12)),
+                                          const SizedBox(height: 4),
+                                          Text(review.replies.first.replyText, style: TextStyle(fontSize: 12, color: Colors.grey.shade800)),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      ),
+
                   const SizedBox(height: 100),
                 ],
               ),
@@ -273,7 +423,7 @@ class _SalonDetailsScreenState extends ConsumerState<SalonDetailsScreen> {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: theme.cardColor,
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -4))],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -4))],
           ),
           child: SafeArea(
             child: Row(

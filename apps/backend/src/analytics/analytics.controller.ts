@@ -17,7 +17,7 @@ export class AnalyticsController {
 
   @Get('dashboard')
   @UseGuards(TenantGuard, RolesGuard)
-  @Roles(UserRole.SALON_OWNER, UserRole.STAFF)
+  @Roles(UserRole.SALON_OWNER, UserRole.MANAGER, UserRole.RECEPTIONIST, UserRole.STAFF)
   @ApiHeader({ name: 'x-tenant-id' })
   @ApiOperation({ summary: 'Get dashboard summary stats for salon owner/staff' })
   async getDashboardStats(@TenantId() tenantId: string): Promise<ApiResponse<any>> {
@@ -30,7 +30,7 @@ export class AnalyticsController {
 
   @Get('peak-hours')
   @UseGuards(TenantGuard, RolesGuard)
-  @Roles(UserRole.SALON_OWNER)
+  @Roles(UserRole.SALON_OWNER, UserRole.MANAGER)
   @ApiHeader({ name: 'x-tenant-id' })
   @ApiOperation({ summary: 'Get operational peak-hours appointment charts data' })
   async getPeakHours(@TenantId() tenantId: string): Promise<ApiResponse<any>> {
@@ -43,11 +43,24 @@ export class AnalyticsController {
 
   @Get('services')
   @UseGuards(TenantGuard, RolesGuard)
-  @Roles(UserRole.SALON_OWNER)
+  @Roles(UserRole.SALON_OWNER, UserRole.MANAGER)
   @ApiHeader({ name: 'x-tenant-id' })
   @ApiOperation({ summary: 'Get top performing services ranked by sales volume' })
   async getTopServices(@TenantId() tenantId: string): Promise<ApiResponse<any>> {
     const data = await this.analyticsService.getTopServices(tenantId);
+    return {
+      success: true,
+      data,
+    };
+  }
+
+  @Get('ai-insights')
+  @UseGuards(TenantGuard, RolesGuard)
+  @Roles(UserRole.SALON_OWNER, UserRole.MANAGER)
+  @ApiHeader({ name: 'x-tenant-id' })
+  @ApiOperation({ summary: 'Get AI business forecasting insights and alerts' })
+  async getAiInsights(@TenantId() tenantId: string): Promise<ApiResponse<any>> {
+    const data = await this.analyticsService.getAiInsights(tenantId);
     return {
       success: true,
       data,
