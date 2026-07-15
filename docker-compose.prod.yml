@@ -93,6 +93,7 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: "http://trimly-backend:4000/api/v1"
+      COOKIE_SECURE: "false"
     depends_on:
       backend:
         condition: service_healthy

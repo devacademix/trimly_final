@@ -4,6 +4,7 @@ export const ACCESS_TOKEN_COOKIE = 'trimly_access_token';
 export const REFRESH_TOKEN_COOKIE = 'trimly_refresh_token';
 
 const isProd = process.env.NODE_ENV === 'production';
+const isSecureCookie = process.env.COOKIE_SECURE === 'false' ? false : isProd;
 
 interface JwtPayload {
   sub: string;
@@ -53,14 +54,14 @@ export async function setSessionCookies(accessToken: string, refreshToken: strin
 
   store.set(ACCESS_TOKEN_COOKIE, accessToken, {
     httpOnly: true,
-    secure: isProd,
+    secure: isSecureCookie,
     sameSite: 'lax',
     path: '/',
     maxAge: accessMaxAge,
   });
   store.set(REFRESH_TOKEN_COOKIE, refreshToken, {
     httpOnly: true,
-    secure: isProd,
+    secure: isSecureCookie,
     sameSite: 'lax',
     path: '/',
     maxAge: 60 * 60 * 24 * 30,
