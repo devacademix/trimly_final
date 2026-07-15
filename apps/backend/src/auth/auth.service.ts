@@ -159,9 +159,7 @@ export class AuthService {
         console.error(`[Fast2SMS Exception] Failed to send OTP:`, err);
       }
     } else {
-      if (process.env.NODE_ENV !== 'production') {
-        console.info(`[SMS OTP SIMULATION] OTP requested for phone ${phoneNormalized} (delivery not yet wired to a provider). OTP is: ${otp}`);
-      }
+      console.info(`[SMS OTP SIMULATION] OTP requested for phone ${phoneNormalized} (delivery not yet wired to a provider). OTP is: ${otp}`);
     }
 
     return {
