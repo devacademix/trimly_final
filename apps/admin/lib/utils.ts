@@ -20,3 +20,16 @@ export function formatDate(value: string | Date): string {
     timeStyle: 'short',
   }).format(date);
 }
+
+export function getPublicImageUrl(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  if (typeof window !== 'undefined') {
+    const publicHost = `${window.location.hostname}:4000`;
+    return url
+      .replace(/localhost:4000/g, publicHost)
+      .replace(/127\.0\.0\.1:4000/g, publicHost)
+      .replace(/10\.0\.2\.2:4000/g, publicHost)
+      .replace(/trimly-backend:4000/g, publicHost);
+  }
+  return url;
+}

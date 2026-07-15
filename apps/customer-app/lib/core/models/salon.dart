@@ -126,7 +126,7 @@ class SalonStaff {
       profileImageUrl: user?['profileImageUrl'] as String?,
       bio: json['bio'] as String?,
       specialities: (json['specialities'] as List?)?.cast<String>() ?? const [],
-      rating: (json['rating'] as num?)?.toDouble() ?? 0,
+      rating: double.tryParse(json['rating']?.toString() ?? '') ?? 0.0,
     );
   }
 }

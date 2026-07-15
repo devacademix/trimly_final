@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { backendFetch, BackendError } from '@/lib/backend';
-import { Sidebar } from '@/components/layout/sidebar';
-import { Topbar } from '@/components/layout/topbar';
+import { DashboardLayoutClient } from '@/components/layout/dashboard-layout-client';
 import type { AdminUser } from '@/types/admin';
 import { UserRole } from '@/types/admin';
 
@@ -28,12 +27,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Topbar user={user} />
-        <main className="flex-1 p-4 md:p-6">{children}</main>
-      </div>
-    </div>
+    <DashboardLayoutClient user={user}>
+      {children}
+    </DashboardLayoutClient>
   );
 }

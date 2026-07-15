@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useUpdateSalonStatus, useDeleteSalon } from '@/lib/hooks/use-admin';
 import type { Salon, TenantStatus } from '@/types/admin';
 import { toast } from 'sonner';
+import { getPublicImageUrl } from '@/lib/utils';
 
 interface Props {
   salon: Salon | null;
@@ -85,7 +86,7 @@ export function SalonDetailDialog({ salon, open, onOpenChange }: Props) {
           {/* Header cover image */}
           <div className="relative h-32 w-full rounded-t-lg bg-slate-900 overflow-hidden -mx-6 -mt-6 mb-4">
             {salon.coverImageUrl ? (
-              <img src={salon.coverImageUrl} className="h-full w-full object-cover opacity-80" alt="Cover" />
+              <img src={getPublicImageUrl(salon.coverImageUrl)} className="h-full w-full object-cover opacity-80" alt="Cover" />
             ) : (
               <div className="h-full w-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold text-lg">
                 Trimly Salon Profile
@@ -95,7 +96,7 @@ export function SalonDetailDialog({ salon, open, onOpenChange }: Props) {
             <div className="absolute bottom-2 left-4 flex items-center gap-3">
               <div className="h-16 w-16 rounded-full border-2 border-white bg-white overflow-hidden shadow-md">
                 {salon.logoUrl ? (
-                  <img src={salon.logoUrl} className="h-full w-full object-cover" alt="Logo" />
+                  <img src={getPublicImageUrl(salon.logoUrl)} className="h-full w-full object-cover" alt="Logo" />
                 ) : (
                   <div className="h-full w-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-lg">
                     {salon.name[0]}
