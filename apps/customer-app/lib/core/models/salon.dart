@@ -1,3 +1,5 @@
+import '../config/env.dart';
+
 /// Summary shape returned by `GET /discovery/salons`.
 class Salon {
   final String id;
@@ -30,8 +32,8 @@ class Salon {
       name: json['name'] as String,
       slug: json['slug'] as String,
       description: json['description'] as String?,
-      logoUrl: json['logoUrl'] as String?,
-      coverImageUrl: json['coverImageUrl'] as String?,
+      logoUrl: Env.cleanImageUrl(json['logoUrl'] as String?),
+      coverImageUrl: Env.cleanImageUrl(json['coverImageUrl'] as String?),
       primaryCity: json['primaryCity'] as String?,
       branchCount: (json['_count'] as Map<String, dynamic>?)?['branches'] as int? ?? 0,
       rating: (json['rating'] as num?)?.toDouble(),
@@ -95,7 +97,7 @@ class SalonService {
       description: json['description'] as String?,
       price: double.parse(json['price'].toString()),
       duration: json['duration'] as int,
-      imageUrl: json['imageUrl'] as String?,
+      imageUrl: Env.cleanImageUrl(json['imageUrl'] as String?),
       categoryName: categoryName,
     );
   }
@@ -123,7 +125,7 @@ class SalonStaff {
     return SalonStaff(
       id: json['id'] as String,
       fullName: user?['fullName'] as String? ?? 'Staff member',
-      profileImageUrl: user?['profileImageUrl'] as String?,
+      profileImageUrl: Env.cleanImageUrl(user?['profileImageUrl'] as String?),
       bio: json['bio'] as String?,
       specialities: (json['specialities'] as List?)?.cast<String>() ?? const [],
       rating: double.tryParse(json['rating']?.toString() ?? '') ?? 0.0,

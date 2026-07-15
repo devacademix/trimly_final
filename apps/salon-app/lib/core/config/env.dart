@@ -20,4 +20,23 @@ class Env {
     final uri = Uri.parse(apiBaseUrl);
     return '${uri.scheme}://${uri.authority}';
   }
+
+  static String get apiHost {
+    try {
+      final uri = Uri.parse(apiBaseUrl);
+      return uri.authority;
+    } catch (_) {
+      return 'localhost:4000';
+    }
+  }
+
+  static String cleanImageUrl(String? url) {
+    if (url == null || url.isEmpty) return '';
+    final host = apiHost;
+    return url
+        .replaceAll('localhost:4000', host)
+        .replaceAll('127.0.0.1:4000', host)
+        .replaceAll('10.0.2.2:4000', host)
+        .replaceAll('trimly-backend:4000', host);
+  }
 }

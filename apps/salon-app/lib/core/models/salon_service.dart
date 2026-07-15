@@ -1,3 +1,5 @@
+import '../config/env.dart';
+
 class ServiceCategory {
   final String id;
   final String name;
@@ -54,7 +56,7 @@ class SalonService {
       duration: (json['duration'] as num).toInt(),
       categoryId: json['categoryId'] as String?,
       categoryName: category?['name'] as String?,
-      imageUrl: json['imageUrl'] as String?,
+      imageUrl: Env.cleanImageUrl(json['imageUrl'] as String?),
       gender: (json['gender'] as String?) ?? 'OTHER',
       isActive: (json['isActive'] as bool?) ?? true,
       homeServiceAvailable: json['homeServiceAvailable'] as bool?,

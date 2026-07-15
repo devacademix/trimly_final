@@ -1,3 +1,5 @@
+import '../config/env.dart';
+
 /// Full salon profile returned by GET /salon/profile
 class SalonProfile {
   final String id;
@@ -70,8 +72,8 @@ class SalonProfile {
       panNumber: json['panNumber'] as String?,
       ownerEmail: json['ownerEmail'] as String?,
       ownerPhone: json['ownerPhone'] as String?,
-      logoUrl: json['logoUrl'] as String?,
-      coverImageUrl: json['coverImageUrl'] as String?,
+      logoUrl: Env.cleanImageUrl(json['logoUrl'] as String?),
+      coverImageUrl: Env.cleanImageUrl(json['coverImageUrl'] as String?),
       websiteUrl: json['websiteUrl'] as String?,
       fullAddress: json['fullAddress'] as String?,
       area: json['area'] as String?,
